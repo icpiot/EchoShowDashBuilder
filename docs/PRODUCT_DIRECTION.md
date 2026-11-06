@@ -22,6 +22,9 @@ This document records the requirements agreed in conversation on 7 November 2026
 - The menu should support the built-in Cameras and Lights destinations, with future destinations added without changing the profile model.
 - Menu items should retain their label, icon, destination, and optional active-state styling.
 - The runtime dashboard must render only the configured items for that profile; it must not show unused destinations by default.
+- Each dashboard profile must include a kiosk mode toggle, independently set to on or off.
+- Kiosk mode is a profile preference, so a lounge display can use kiosk mode while a bedroom display does not.
+- When kiosk mode is enabled, the dashboard should present the configured dashboard content without unnecessary Home Assistant chrome; the exact supported presentation mechanism must be verified against the HA111 frontend before implementation.
 
 The initial configuration model should therefore be equivalent to:
 
@@ -29,6 +32,7 @@ The initial configuration model should therefore be equivalent to:
 profiles:
   lounge:
     target: "Echo Show Lounge"
+    kiosk_mode: true
     menu:
       - cameras
       - lights
@@ -37,6 +41,7 @@ profiles:
       - security
   bedroom:
     target: "Echo Show Bedroom"
+    kiosk_mode: false
     menu:
       - cameras
 ```
