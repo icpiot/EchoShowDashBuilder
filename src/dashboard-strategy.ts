@@ -46,6 +46,18 @@ export function generateEchoDashboard(config: EchoDashboardConfig, hass: HomeAss
   };
 }
 
+class EchoShowDashboardStrategy extends HTMLElement {
+  static configRequired = true;
+  static getConfigElement() { return document.createElement("echo-show-editor"); }
+  static async generate(config: EchoDashboardConfig, hass: HomeAssistantState) {
+    return generateEchoDashboard(config, hass);
+  }
+}
+
+if (!customElements.get("ll-strategy-dashboard-echo-show")) {
+  customElements.define("ll-strategy-dashboard-echo-show", EchoShowDashboardStrategy);
+}
+
 export function registerEchoDashboardStrategy(): void {
   const strategy = {
     type: "echo-show",
@@ -54,7 +66,6 @@ export function registerEchoDashboardStrategy(): void {
     description: "A responsive Echo Show dashboard with Cameras and Lights views.",
     documentationURL: "https://github.com/echo-show-html-dash/echo-show-html-dash",
     configRequired: true,
-    getConfigElement: () => document.createElement("echo-show-editor"),
   };
   window.customStrategies = window.customStrategies || [];
   window.customStrategies.push(strategy);
