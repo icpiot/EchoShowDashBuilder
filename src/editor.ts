@@ -1,6 +1,14 @@
 import { listAvailableCameras } from "./camera-feeds";
 
-type Hass = { states: Record<string, any> };
+type Hass = { states: Record<string, any>; callService?: (domain: string, service: string, data: Record<string, unknown>) => Promise<unknown> };
+
+type EchoTarget = {
+  key: string;
+  label: string;
+  dashboard: string;
+  dashboardToShow: string;
+  idle: string;
+};
 
 class EchoShowEditor extends HTMLElement {
   private config: any = {};
@@ -13,16 +21,46 @@ class EchoShowEditor extends HTMLElement {
     this.dispatchEvent(new CustomEvent("config-changed", { bubbles: true, composed: true, detail: { config: this.config } }));
     this.render();
   }
+  private targets(): EchoTarget[] {
+    const states = this._hass?.states || {};
+    const dashboardEntities = Object.keys(states).filter((entity) => entity.startsWith("select.") && entity.endsWith("_dashboard_to_show"));
+    return dashboardEntities.map((dashboardToShow) => {
+      const key = dashboardToShow.slice("select.".length, -"_dashboard_to_show".length);
+      const dashboard = `select.${key}_dashboard`;
+      const idle = `switch.${key}_dashboard_when_idle`;
+      const friendly = String(states[dashboardToShow]?.attributes?.friendly_name || key.replace(/_/g, " "));
+      return { key, label: friendly.replace(/ dashboard to show$/i, ""), dashboard, dashboardToShow, idle };
+    }).filter((target) => states[target.dashboard] || states[target.dashboardToShow]);
+  }
   private render() {
     if (!this.shadowRoot) this.attachShadow({ mode: "open" });
     const root = this.shadowRoot!;
     const cameras = this._hass ? listAvailableCameras(this._hass) : [];
     const included = new Set<string>(this.config.included_cameras || cameras.map((camera) => camera.entityId));
     const menu = Array.isArray(this.config.menu) ? this.config.menu : ["cameras", "lights"];
+    const targets = this.targets();
+    const selectedTarget = String(this.config.echo_target || "");
+    const selectedDashboard = String(this.config.echo_dashboard || this.config.title || "Echo Show HTML Dash Dev");
+    const activeTarget = targets.find((target) => target.key === selectedTarget);
+    const dashboardOptions = Array.isArray(this._hass?.states[activeTarget?.dashboardToShow || ""]?.attributes?.options)
+      ? this._hass?.states[activeTarget?.dashboardToShow || ""]?.attributes?.options as string[] : [];
+    const dashboardSelect = dashboardOptions.length
+      ? dashboardOptions.map((option) => `<option value="${String(option).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;")}" ${option === selectedDashboard ? "selected" : ""}>${String(option).replace(/</g, "&lt;")}</option>`).join("")
+      : `<option value="${selectedDashboard.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;")}" selected>No dashboard options reported</option>`;
+    const selectedMode = String(this.config.echo_mode || "Streamed");
+    const selectedIdle = Boolean(this.config.echo_dashboard_when_idle);
     root.innerHTML = `<style>:host{display:block;font-family:Arial,sans-serif;padding:12px}.row{display:flex;gap:10px;align-items:center;margin:10px 0}.section{margin:18px 0}.section h3{margin:0 0 8px}.camera{display:flex;gap:8px;padding:6px 0}input[type=text]{width:100%;padding:8px}label{cursor:pointer}.hint{opacity:.7;font-size:.9em}</style>
       <div class="section"><h3>Echo Show profile</h3><div class="row"><label for="title">Profile name</label><input id="title" type="text" value="${String(this.config.title || "Echo Show").replace(/"/g, "&quot;")}"></div><div class="row"><input id="kiosk" type="checkbox" ${this.config.kiosk_mode ? "checked" : ""}><label for="kiosk">Kiosk mode</label></div></div>
       <div class="section"><h3>Menu items</h3><div class="hint">Choose the destinations shown on this Echo Show, in this order.</div>${["home", "cameras", "lights"].map((item) => `<label class="camera"><input type="checkbox" data-menu="${item}" ${menu.includes(item) ? "checked" : ""}>${item[0].toUpperCase() + item.slice(1)}</label>`).join("")}</div>
-      <div class="section"><h3>Included cameras</h3>${cameras.length ? cameras.map((camera) => `<label class="camera"><input type="checkbox" data-camera="${camera.entityId}" ${included.has(camera.entityId) ? "checked" : ""}>${camera.label}</label>`).join("") : `<div class="hint">Camera entities will appear when Home Assistant provides state.</div>`}</div>`;
+      <div class="section"><h3>Included cameras</h3>${cameras.length ? cameras.map((camera) => `<label class="camera"><input type="checkbox" data-camera="${camera.entityId}" ${included.has(camera.entityId) ? "checked" : ""}>${camera.label}</label>`).join("") : `<div class="hint">Camera entities will appear when Home Assistant provides state.</div>`}</div>
+      <div class="section"><h3>Apply to Echo Show</h3><div class="hint">Uses the TECHO5 device controls already exposed by Home Assistant. Applying changes affects only the selected device.</div>
+        <div class="row"><label for="echo-target">Echo Show</label><select id="echo-target">${targets.length ? `<option value="">Select a device</option>${targets.map((target) => `<option value="${target.key}" ${target.key === selectedTarget ? "selected" : ""}>${target.label}</option>`).join("")}` : `<option value="">No TECHO5 devices discovered</option>`}</select></div>
+        <div class="row"><label for="echo-dashboard">Dashboard</label><select id="echo-dashboard">${dashboardSelect}</select></div>
+        <div class="hint">Current assignment: ${activeTarget ? `${String(this._hass?.states[activeTarget.dashboard]?.state || "unknown")} / ${String(this._hass?.states[activeTarget.dashboardToShow]?.state || "unknown")} / idle ${String(this._hass?.states[activeTarget.idle]?.state || "unknown")}` : "Select a device to read its current settings."}</div>
+        <div class="row"><label for="echo-mode">Presentation</label><select id="echo-mode"><option ${selectedMode === "Streamed" ? "selected" : ""}>Streamed</option><option ${selectedMode === "Drawn on the device" ? "selected" : ""}>Drawn on the device</option></select></div>
+        <div class="row"><input id="echo-idle" type="checkbox" ${selectedIdle ? "checked" : ""}><label for="echo-idle">Dashboard when idle</label></div>
+        <button id="echo-apply" type="button">Apply to Echo Show</button><span id="echo-status" class="hint"></span>
+      </div>`;
     root.querySelector<HTMLInputElement>("#title")?.addEventListener("change", (event) => this.emit({ title: (event.target as HTMLInputElement).value }));
     root.querySelector<HTMLInputElement>("#kiosk")?.addEventListener("change", (event) => this.emit({ kiosk_mode: (event.target as HTMLInputElement).checked }));
     root.querySelectorAll<HTMLInputElement>("[data-menu]").forEach((input) => input.addEventListener("change", () => {
@@ -33,6 +71,30 @@ class EchoShowEditor extends HTMLElement {
       const next = Array.from(root.querySelectorAll<HTMLInputElement>("[data-camera]:checked")).map((item) => item.dataset.camera);
       this.emit({ included_cameras: next });
     }));
+    root.querySelector<HTMLSelectElement>("#echo-target")?.addEventListener("change", (event) => this.emit({ echo_target: (event.target as HTMLSelectElement).value }));
+    root.querySelector<HTMLSelectElement>("#echo-dashboard")?.addEventListener("change", (event) => this.emit({ echo_dashboard: (event.target as HTMLSelectElement).value }));
+    root.querySelector<HTMLSelectElement>("#echo-mode")?.addEventListener("change", (event) => this.emit({ echo_mode: (event.target as HTMLSelectElement).value }));
+    root.querySelector<HTMLInputElement>("#echo-idle")?.addEventListener("change", (event) => this.emit({ echo_dashboard_when_idle: (event.target as HTMLInputElement).checked }));
+    root.querySelector<HTMLButtonElement>("#echo-apply")?.addEventListener("click", async () => {
+      const target = targets.find((item) => item.key === (root.querySelector<HTMLSelectElement>("#echo-target")?.value || ""));
+      const status = root.querySelector<HTMLElement>("#echo-status");
+      if (!target || !this._hass?.callService) { if (status) status.textContent = "Select a device and ensure Home Assistant service access is available."; return; }
+      const dashboard = root.querySelector<HTMLSelectElement>("#echo-dashboard")?.value || "";
+      const mode = root.querySelector<HTMLSelectElement>("#echo-mode")?.value || "Streamed";
+      const idle = root.querySelector<HTMLInputElement>("#echo-idle")?.checked || false;
+      try {
+        const options = this._hass.states[target.dashboardToShow]?.attributes?.options;
+        if (!Array.isArray(options) || !options.includes(dashboard)) {
+          if (status) status.textContent = "That device does not expose the selected dashboard.";
+          return;
+        }
+        await this._hass.callService("select", "select_option", { entity_id: target.dashboard, option: mode });
+        await this._hass.callService("select", "select_option", { entity_id: target.dashboardToShow, option: dashboard });
+        await this._hass.callService("switch", idle ? "turn_on" : "turn_off", { entity_id: target.idle });
+        const current = this._hass.states[target.dashboardToShow]?.state;
+        if (status) status.textContent = current === dashboard ? "Applied and verified." : `Applied; waiting for device state to report ${dashboard}.`;
+      } catch (error) { if (status) status.textContent = `Apply failed: ${String(error)}`; }
+    });
   }
 }
 
