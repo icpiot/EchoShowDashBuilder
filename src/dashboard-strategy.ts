@@ -44,9 +44,7 @@ export function generateEchoDashboard(config: EchoDashboardConfig, hass: HomeAss
       },
     ],
   };
-  if (config.kiosk_mode) {
-    Object.assign(dashboard, { kiosk_mode: { kiosk: true } });
-  }
+  Object.assign(dashboard, { kiosk_mode: { kiosk: Boolean(config.kiosk_mode) } });
   return dashboard;
 }
 
