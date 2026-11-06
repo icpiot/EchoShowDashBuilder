@@ -37,6 +37,7 @@ class EchoShowEditor extends HTMLElement {
     const root = this.shadowRoot!;
     const cameras = this._hass ? listAvailableCameras(this._hass) : [];
     const included = new Set<string>(this.config.included_cameras || cameras.map((camera) => camera.entityId));
+    const overlays = this.config.camera_overlays || {};
     const menu = Array.isArray(this.config.menu) ? this.config.menu : ["cameras", "lights"];
     const targets = this.targets();
     const selectedTarget = String(this.config.echo_target || "");
@@ -52,7 +53,7 @@ class EchoShowEditor extends HTMLElement {
     root.innerHTML = `<style>:host{display:block;font-family:Arial,sans-serif;padding:12px}.row{display:flex;gap:10px;align-items:center;margin:10px 0}.section{margin:18px 0}.section h3{margin:0 0 8px}.camera{display:flex;gap:8px;padding:6px 0}input[type=text]{width:100%;padding:8px}label{cursor:pointer}.hint{opacity:.7;font-size:.9em}</style>
       <div class="section"><h3>Echo Show profile</h3><div class="row"><label for="title">Profile name</label><input id="title" type="text" value="${String(this.config.title || "Echo Show").replace(/"/g, "&quot;")}"></div><div class="row"><input id="kiosk" type="checkbox" ${this.config.kiosk_mode ? "checked" : ""}><label for="kiosk">Kiosk mode</label></div></div>
       <div class="section"><h3>Menu items</h3><div class="hint">Choose the destinations shown on this Echo Show, in this order.</div>${["home", "cameras", "lights"].map((item) => `<label class="camera"><input type="checkbox" data-menu="${item}" ${menu.includes(item) ? "checked" : ""}>${item[0].toUpperCase() + item.slice(1)}</label>`).join("")}</div>
-      <div class="section"><h3>Included cameras</h3>${cameras.length ? cameras.map((camera) => `<label class="camera"><input type="checkbox" data-camera="${camera.entityId}" ${included.has(camera.entityId) ? "checked" : ""}>${camera.label}</label>`).join("") : `<div class="hint">Camera entities will appear when Home Assistant provides state.</div>`}</div>
+      <div class="section"><h3>Included cameras</h3>${cameras.length ? cameras.map((camera) => { const o=overlays[camera.entityId] || {}; return `<div class="camera"><label><input type="checkbox" data-camera="${camera.entityId}" ${included.has(camera.entityId) ? "checked" : ""}>${camera.label}</label><label>Show name <input type="checkbox" data-overlay-show="${camera.entityId}" ${o.show !== false ? "checked" : ""}></label><select data-overlay-h="${camera.entityId}"><option value="left" ${o.horizontal === "left" || !o.horizontal ? "selected" : ""}>Left</option><option value="center" ${o.horizontal === "center" ? "selected" : ""}>Centre</option><option value="right" ${o.horizontal === "right" ? "selected" : ""}>Right</option></select><select data-overlay-v="${camera.entityId}"><option value="top" ${o.vertical === "top" ? "selected" : ""}>Top</option><option value="bottom" ${o.vertical !== "top" ? "selected" : ""}>Bottom</option></select></div>`; }).join("") : `<div class="hint">Camera entities will appear when Home Assistant provides state.</div>`}</div>
       <div class="section"><h3>Apply to Echo Show</h3><div class="hint">Uses the TECHO5 device controls already exposed by Home Assistant. Applying changes affects only the selected device.</div>
         <div class="row"><label for="echo-target">Echo Show</label><select id="echo-target" size="${Math.min(Math.max(targets.length + 1, 2), 5)}">${targets.length ? `<option value="">Select a device</option>${targets.map((target) => `<option value="${target.key}" ${target.key === selectedTarget ? "selected" : ""}>${target.label}</option>`).join("")}` : `<option value="">No TECHO5 devices discovered</option>`}</select></div>
         <div class="row"><label for="echo-dashboard">Dashboard</label><select id="echo-dashboard" size="${Math.min(Math.max(dashboardOptions.length, 2), 6)}">${dashboardSelect}</select></div>
@@ -71,6 +72,13 @@ class EchoShowEditor extends HTMLElement {
       const next = Array.from(root.querySelectorAll<HTMLInputElement>("[data-camera]:checked")).map((item) => item.dataset.camera);
       this.emit({ included_cameras: next });
     }));
+    const updateOverlay = (entity: string) => {
+      const next = { ...(this.config.camera_overlays || {}) };
+      next[entity] = { show: root.querySelector<HTMLInputElement>(`[data-overlay-show="${entity}"]`)?.checked !== false, horizontal: root.querySelector<HTMLSelectElement>(`[data-overlay-h="${entity}"]`)?.value || "left", vertical: root.querySelector<HTMLSelectElement>(`[data-overlay-v="${entity}"]`)?.value || "bottom" };
+      this.emit({ camera_overlays: next });
+    };
+    root.querySelectorAll<HTMLInputElement>("[data-overlay-show]").forEach((input) => input.addEventListener("change", () => updateOverlay(input.dataset.overlayShow || "")));
+    root.querySelectorAll<HTMLSelectElement>("[data-overlay-h], [data-overlay-v]").forEach((input) => input.addEventListener("change", () => updateOverlay((input.dataset.overlayH || input.dataset.overlayV || ""))));
     root.querySelector<HTMLSelectElement>("#echo-target")?.addEventListener("change", (event) => {
       const key = (event.target as HTMLSelectElement).value;
       const target = targets.find((item) => item.key === key);
