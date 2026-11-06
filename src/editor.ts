@@ -54,8 +54,8 @@ class EchoShowEditor extends HTMLElement {
       <div class="section"><h3>Menu items</h3><div class="hint">Choose the destinations shown on this Echo Show, in this order.</div>${["home", "cameras", "lights"].map((item) => `<label class="camera"><input type="checkbox" data-menu="${item}" ${menu.includes(item) ? "checked" : ""}>${item[0].toUpperCase() + item.slice(1)}</label>`).join("")}</div>
       <div class="section"><h3>Included cameras</h3>${cameras.length ? cameras.map((camera) => `<label class="camera"><input type="checkbox" data-camera="${camera.entityId}" ${included.has(camera.entityId) ? "checked" : ""}>${camera.label}</label>`).join("") : `<div class="hint">Camera entities will appear when Home Assistant provides state.</div>`}</div>
       <div class="section"><h3>Apply to Echo Show</h3><div class="hint">Uses the TECHO5 device controls already exposed by Home Assistant. Applying changes affects only the selected device.</div>
-        <div class="row"><label for="echo-target">Echo Show</label><select id="echo-target">${targets.length ? `<option value="">Select a device</option>${targets.map((target) => `<option value="${target.key}" ${target.key === selectedTarget ? "selected" : ""}>${target.label}</option>`).join("")}` : `<option value="">No TECHO5 devices discovered</option>`}</select></div>
-        <div class="row"><label for="echo-dashboard">Dashboard</label><select id="echo-dashboard">${dashboardSelect}</select></div>
+        <div class="row"><label for="echo-target">Echo Show</label><select id="echo-target" size="${Math.min(Math.max(targets.length + 1, 2), 5)}">${targets.length ? `<option value="">Select a device</option>${targets.map((target) => `<option value="${target.key}" ${target.key === selectedTarget ? "selected" : ""}>${target.label}</option>`).join("")}` : `<option value="">No TECHO5 devices discovered</option>`}</select></div>
+        <div class="row"><label for="echo-dashboard">Dashboard</label><select id="echo-dashboard" size="${Math.min(Math.max(dashboardOptions.length, 2), 6)}">${dashboardSelect}</select></div>
         <div class="hint">Current assignment: ${activeTarget ? `${String(this._hass?.states[activeTarget.dashboard]?.state || "unknown")} / ${String(this._hass?.states[activeTarget.dashboardToShow]?.state || "unknown")} / idle ${String(this._hass?.states[activeTarget.idle]?.state || "unknown")}` : "Select a device to read its current settings."}</div>
         <div class="row"><label for="echo-mode">Presentation</label><select id="echo-mode"><option ${selectedMode === "Streamed" ? "selected" : ""}>Streamed</option><option ${selectedMode === "Drawn on the device" ? "selected" : ""}>Drawn on the device</option></select></div>
         <div class="row"><input id="echo-idle" type="checkbox" ${selectedIdle ? "checked" : ""}><label for="echo-idle">Dashboard when idle</label></div>
@@ -71,7 +71,12 @@ class EchoShowEditor extends HTMLElement {
       const next = Array.from(root.querySelectorAll<HTMLInputElement>("[data-camera]:checked")).map((item) => item.dataset.camera);
       this.emit({ included_cameras: next });
     }));
-    root.querySelector<HTMLSelectElement>("#echo-target")?.addEventListener("change", (event) => this.emit({ echo_target: (event.target as HTMLSelectElement).value }));
+    root.querySelector<HTMLSelectElement>("#echo-target")?.addEventListener("change", (event) => {
+      const key = (event.target as HTMLSelectElement).value;
+      const target = targets.find((item) => item.key === key);
+      const options = target ? this._hass?.states[target.dashboardToShow]?.attributes?.options : [];
+      this.emit({ echo_target: key, echo_dashboard: Array.isArray(options) && options.length ? options[0] : "" });
+    });
     root.querySelector<HTMLSelectElement>("#echo-dashboard")?.addEventListener("change", (event) => this.emit({ echo_dashboard: (event.target as HTMLSelectElement).value }));
     root.querySelector<HTMLSelectElement>("#echo-mode")?.addEventListener("change", (event) => this.emit({ echo_mode: (event.target as HTMLSelectElement).value }));
     root.querySelector<HTMLInputElement>("#echo-idle")?.addEventListener("change", (event) => this.emit({ echo_dashboard_when_idle: (event.target as HTMLInputElement).checked }));
@@ -86,6 +91,10 @@ class EchoShowEditor extends HTMLElement {
         const options = this._hass.states[target.dashboardToShow]?.attributes?.options;
         if (!Array.isArray(options) || !options.includes(dashboard)) {
           if (status) status.textContent = "That device does not expose the selected dashboard.";
+          return;
+        }
+        if (!window.confirm(`Apply ${mode} / ${dashboard} / idle ${idle ? "on" : "off"} to ${target.label}?`)) {
+          if (status) status.textContent = "Apply cancelled.";
           return;
         }
         await this._hass.callService("select", "select_option", { entity_id: target.dashboard, option: mode });
