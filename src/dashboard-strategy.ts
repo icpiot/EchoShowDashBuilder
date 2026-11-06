@@ -17,7 +17,7 @@ export function generateEchoDashboard(config: EchoDashboardConfig, hass: HomeAss
   const menu = config.menu?.length ? config.menu : ["cameras", "lights"];
   const menuItems = menu.map((path) => ({ label: path[0].toUpperCase() + path.slice(1), path, icon: path === "cameras" ? "mdi:cctv" : path === "lights" ? "mdi:lightbulb" : "mdi:home" }));
   const menuCard = (active_path: string) => ({ type: "custom:echo-menu", items: menuItems, active_path });
-  return {
+  const dashboard = {
     title: config.title || "Echo Show",
     views: [
       {
@@ -44,6 +44,10 @@ export function generateEchoDashboard(config: EchoDashboardConfig, hass: HomeAss
       },
     ],
   };
+  if (config.kiosk_mode) {
+    Object.assign(dashboard, { kiosk_mode: { kiosk: true } });
+  }
+  return dashboard;
 }
 
 class EchoShowDashboardStrategy extends HTMLElement {
