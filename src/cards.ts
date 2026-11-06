@@ -9,9 +9,9 @@ class EchoMenu extends HTMLElement {
   connectedCallback() { this.render(); }
   private render() {
     const items = Array.isArray(this.config.items) ? this.config.items : [];
-    if (!this.shadowRoot) this.attachShadow({mode:'open'});
-    this.shadowRoot.innerHTML = `<style>${styles}</style><nav class="menu" aria-label="Dashboard navigation">${items.map((item:any) => `<button data-path="${String(item.path || '').replace(/"/g,'&quot;')}" class="${item.path === this.config.active_path ? 'active' : ''}">${item.icon ? `<ha-icon icon="${item.icon}"></ha-icon> ` : ''}${item.label || item.path}</button>`).join('')}</nav>`;
-    this.shadowRoot.querySelectorAll('button').forEach((button) => button.addEventListener('click', () => {
+    const root = this.shadowRoot ?? this.attachShadow({mode:'open'});
+    root.innerHTML = `<style>${styles}</style><nav class="menu" aria-label="Dashboard navigation">${items.map((item:any) => `<button data-path="${String(item.path || '').replace(/"/g,'&quot;')}" class="${item.path === this.config.active_path ? 'active' : ''}">${item.icon ? `<ha-icon icon="${item.icon}"></ha-icon> ` : ''}${item.label || item.path}</button>`).join('')}</nav>`;
+    root.querySelectorAll('button').forEach((button) => button.addEventListener('click', () => {
       const path = (button as HTMLElement).dataset.path || '';
       this.dispatchEvent(new CustomEvent('hass-more-info', {bubbles:true, composed:true, detail:{entityId:path}}));
       this.dispatchEvent(new CustomEvent('location-changed', {bubbles:true, composed:true, detail:{replace:false}}));
@@ -28,9 +28,9 @@ class EchoCameraWall extends HTMLElement {
   disconnectedCallback() { if (this.timer) window.clearInterval(this.timer); this.observer?.disconnect(); }
   private cameras() { return Array.isArray(this.config.cameras) ? this.config.cameras : []; }
   private render() {
-    if (!this.shadowRoot) this.attachShadow({mode:'open'});
-    this.shadowRoot.innerHTML = `<style>${styles}</style><section class="wall" aria-label="Camera wall"></section>`;
-    const wall = this.shadowRoot.querySelector('.wall')!;
+    const root = this.shadowRoot ?? this.attachShadow({mode:'open'});
+    root.innerHTML = `<style>${styles}</style><section class="wall" aria-label="Camera wall"></section>`;
+    const wall = root.querySelector('.wall')!;
     for (const camera of this.cameras()) {
       const tile = document.createElement('article'); tile.className='tile'; tile.dataset.entity=camera.entity;
       tile.innerHTML = `<img alt="${camera.label || camera.entity}"><span class="label">${camera.label || camera.entity}</span>`;
