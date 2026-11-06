@@ -14,8 +14,7 @@ class EchoMenu extends HTMLElement {
     root.querySelectorAll('button').forEach((button) => button.addEventListener('click', () => {
       const path = (button as HTMLElement).dataset.path || '';
       this.dispatchEvent(new CustomEvent('hass-more-info', {bubbles:true, composed:true, detail:{entityId:path}}));
-      this.dispatchEvent(new CustomEvent('location-changed', {bubbles:true, composed:true, detail:{replace:false}}));
-      window.history.pushState({}, '', `${window.location.pathname.replace(/\/[^/]*$/, '')}/${path}`);
+      this.dispatchEvent(new CustomEvent('navigate', {bubbles:true, composed:true, detail:{navigation_path:path}}));
     }));
   }
 }

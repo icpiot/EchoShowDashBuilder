@@ -3,6 +3,8 @@ import { listAvailableCameras, HomeAssistantState } from "./camera-feeds";
 export interface EchoDashboardConfig {
   title?: string;
   included_cameras?: string[];
+  menu?: string[];
+  kiosk_mode?: boolean;
 }
 
 export function generateEchoDashboard(config: EchoDashboardConfig, hass: HomeAssistantState) {
@@ -12,6 +14,9 @@ export function generateEchoDashboard(config: EchoDashboardConfig, hass: HomeAss
     .filter((camera) => included.has(camera.entityId))
     .map((camera) => ({ entity: camera.entityId, label: camera.label }));
 
+  const menu = config.menu?.length ? config.menu : ["cameras", "lights"];
+  const menuItems = menu.map((path) => ({ label: path[0].toUpperCase() + path.slice(1), path, icon: path === "cameras" ? "mdi:cctv" : path === "lights" ? "mdi:lightbulb" : "mdi:home" }));
+  const menuCard = (active_path: string) => ({ type: "custom:echo-menu", items: menuItems, active_path });
   return {
     title: config.title || "Echo Show",
     views: [
@@ -19,20 +24,14 @@ export function generateEchoDashboard(config: EchoDashboardConfig, hass: HomeAss
         title: "Home",
         path: "home",
         cards: [
-          { type: "custom:echo-menu", items: [
-            { label: "Cameras", path: "cameras", icon: "mdi:cctv" },
-            { label: "Lights", path: "lights", icon: "mdi:lightbulb" },
-          ], active_path: "home" },
+          menuCard("home"),
         ],
       },
       {
         title: "Cameras",
         path: "cameras",
         cards: [
-          { type: "custom:echo-menu", items: [
-            { label: "Cameras", path: "cameras", icon: "mdi:cctv" },
-            { label: "Lights", path: "lights", icon: "mdi:lightbulb" },
-          ], active_path: "cameras" },
+          menuCard("cameras"),
           { type: "custom:echo-camera-wall", cameras },
         ],
       },
@@ -40,10 +39,7 @@ export function generateEchoDashboard(config: EchoDashboardConfig, hass: HomeAss
         title: "Lights",
         path: "lights",
         cards: [
-          { type: "custom:echo-menu", items: [
-            { label: "Cameras", path: "cameras", icon: "mdi:cctv" },
-            { label: "Lights", path: "lights", icon: "mdi:lightbulb" },
-          ], active_path: "lights" },
+          menuCard("lights"),
         ],
       },
     ],
@@ -57,10 +53,13 @@ export function registerEchoDashboardStrategy(): void {
     name: "Echo Show HTML Dash",
     description: "A responsive Echo Show dashboard with Cameras and Lights views.",
     documentationURL: "https://github.com/echo-show-html-dash/echo-show-html-dash",
+    configRequired: true,
+    getConfigElement: () => document.createElement("echo-show-editor"),
   };
   window.customStrategies = window.customStrategies || [];
   window.customStrategies.push(strategy);
 }
+
 
 declare global {
   interface Window {
