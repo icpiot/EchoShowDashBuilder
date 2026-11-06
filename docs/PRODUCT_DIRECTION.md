@@ -46,7 +46,17 @@ profiles:
       - cameras
 ```
 
-The exact Home Assistant storage and device-assignment mechanism remains to be selected during implementation. The important boundary is that menu selection is per dashboard profile, not a single global setting.
+One profile belongs to one Echo Show. The profile's primary purpose is to define that show's menu. Its other settings, including camera selection and kiosk mode, are also specific to that show.
+
+## Two-dashboard development workflow
+
+- Maintain a development dashboard for building and verification on a PC. Its kiosk mode is off so the normal Home Assistant menus remain available during testing.
+- Maintain a replica production dashboard for the Echo Show itself. Its kiosk mode is on because Home Assistant navigation consumes too much of the Echo Show's limited display area.
+- Build and verify changes on the PC dashboard first, then apply the same approved change to the production replica.
+- The existing camera reference to reproduce is **Show 8, menu 5**. It is the source dashboard for the first camera-wall implementation and comparison.
+- The two dashboards are separate targets. A successful PC test does not by itself count as live Echo Show verification.
+
+The exact Home Assistant storage and ESPHome attachment mechanism remains to be inspected on HA111. The important boundary is that menu selection is per Echo Show profile, with separate development and production dashboard targets.
 
 ## To define before implementation
 
