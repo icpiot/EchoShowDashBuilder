@@ -12,6 +12,37 @@ This document records the requirements agreed in conversation on 7 November 2026
 - Detect the dimensions of an image delivered to the browser when available and use its aspect ratio to help size the display. Image dimensions alone do not identify a camera's field of view or guarantee its sensor's native resolution.
 - Install as a HACS dashboard plugin, then add the Echo Show dashboard through Home Assistant's dashboard creation flow.
 
+## Menu requirements
+
+- The menu is configured during dashboard setup.
+- The setup must allow the user to choose exactly which menu items are shown and their order.
+- A dashboard profile may contain any practical number of menu items, including one item or five items.
+- Menu configuration belongs to the dashboard profile, so different dashboards can have different menus.
+- A dashboard profile may be assigned to a specific Echo Show or room. For example, a lounge profile can expose five menu items while a bedroom profile exposes one or two.
+- The menu should support the built-in Cameras and Lights destinations, with future destinations added without changing the profile model.
+- Menu items should retain their label, icon, destination, and optional active-state styling.
+- The runtime dashboard must render only the configured items for that profile; it must not show unused destinations by default.
+
+The initial configuration model should therefore be equivalent to:
+
+```yaml
+profiles:
+  lounge:
+    target: "Echo Show Lounge"
+    menu:
+      - cameras
+      - lights
+      - home
+      - weather
+      - security
+  bedroom:
+    target: "Echo Show Bedroom"
+    menu:
+      - cameras
+```
+
+The exact Home Assistant storage and device-assignment mechanism remains to be selected during implementation. The important boundary is that menu selection is per dashboard profile, not a single global setting.
+
 ## To define before implementation
 
 - The exact configuration editor experience after installation; it should be selected based on the dashboard creation flow and may be a strategy editor rather than a standalone settings page.
