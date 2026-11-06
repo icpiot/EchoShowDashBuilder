@@ -13,7 +13,11 @@ class EchoMenu extends HTMLElement {
     root.innerHTML = `<style>${styles}</style><nav class="menu" aria-label="Dashboard navigation">${items.map((item:any) => `<button type="button" data-path="${String(item.path || '').replace(/"/g,'&quot;')}" class="${item.path === this.config.active_path ? 'active' : ''}">${item.icon ? `<ha-icon icon="${item.icon}"></ha-icon> ` : ''}${item.label || item.path}</button>`).join('')}</nav>`;
     root.querySelectorAll('button').forEach((button) => button.addEventListener('click', () => {
       const path = (button as HTMLElement).dataset.path || '';
+      if (!path) return;
       this.dispatchEvent(new CustomEvent('hass-navigate', {bubbles:true, composed:true, detail:{navigation_path:path}}));
+      const segments = window.location.pathname.split('/').filter(Boolean);
+      const dashboardBase = segments.length > 1 ? `/${segments.slice(0, -1).join('/')}` : window.location.pathname.replace(/\/$/, '');
+      window.location.assign(`${dashboardBase}/${encodeURIComponent(path)}`);
     }));
   }
 }
