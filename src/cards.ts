@@ -10,10 +10,10 @@ class EchoMenu extends HTMLElement {
   private render() {
     const items = Array.isArray(this.config.items) ? this.config.items : [];
     const root = this.shadowRoot ?? this.attachShadow({mode:'open'});
-    root.innerHTML = `<style>${styles}</style><nav class="menu" aria-label="Dashboard navigation">${items.map((item:any) => `<button data-path="${String(item.path || '').replace(/"/g,'&quot;')}" class="${item.path === this.config.active_path ? 'active' : ''}">${item.icon ? `<ha-icon icon="${item.icon}"></ha-icon> ` : ''}${item.label || item.path}</button>`).join('')}</nav>`;
+    root.innerHTML = `<style>${styles}</style><nav class="menu" aria-label="Dashboard navigation">${items.map((item:any) => `<button type="button" data-path="${String(item.path || '').replace(/"/g,'&quot;')}" class="${item.path === this.config.active_path ? 'active' : ''}">${item.icon ? `<ha-icon icon="${item.icon}"></ha-icon> ` : ''}${item.label || item.path}</button>`).join('')}</nav>`;
     root.querySelectorAll('button').forEach((button) => button.addEventListener('click', () => {
       const path = (button as HTMLElement).dataset.path || '';
-      this.dispatchEvent(new CustomEvent('navigate', {bubbles:true, composed:true, detail:{navigation_path:path}}));
+      this.dispatchEvent(new CustomEvent('hass-navigate', {bubbles:true, composed:true, detail:{navigation_path:path}}));
     }));
   }
 }
