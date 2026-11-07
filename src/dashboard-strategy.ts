@@ -18,31 +18,18 @@ export function generateEchoDashboard(config: EchoDashboardConfig, hass: HomeAss
   const menu = config.menu?.length ? config.menu : ["home", "cameras", "lights"];
   const menuItems = menu.map((path) => ({ label: path[0].toUpperCase() + path.slice(1), path, icon: path === "cameras" ? "mdi:cctv" : path === "lights" ? "mdi:lightbulb" : "mdi:home" }));
   const menuCard = (active_path: string) => ({ type: "custom:echo-menu", items: menuItems, active_path });
+  const view = (title: string, path: string, content: Record<string, unknown>[] = []) => ({
+    title,
+    path,
+    type: "panel",
+    cards: [{ type: "vertical-stack", cards: [menuCard(path), ...content] }],
+  });
   const dashboard = {
     title: config.title || "Echo Show",
     views: [
-      {
-        title: "Home",
-        path: "home",
-        cards: [
-          menuCard("home"),
-        ],
-      },
-      {
-        title: "Cameras",
-        path: "cameras",
-        cards: [
-          menuCard("cameras"),
-          { type: "custom:echo-camera-wall", cameras },
-        ],
-      },
-      {
-        title: "Lights",
-        path: "lights",
-        cards: [
-          menuCard("lights"),
-        ],
-      },
+      view("Home", "home"),
+      view("Cameras", "cameras", [{ type: "custom:echo-camera-wall", cameras, min_tile_width: 240 }]),
+      view("Lights", "lights"),
     ],
   };
   Object.assign(dashboard, { kiosk_mode: { kiosk: Boolean(config.kiosk_mode) } });
