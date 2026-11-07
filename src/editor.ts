@@ -1,6 +1,11 @@
 import { listAvailableCameras } from "./camera-feeds";
 
-type Hass = { states: Record<string, any>; callService?: (domain: string, service: string, data: Record<string, unknown>) => Promise<unknown> };
+type Hass = {
+  states: Record<string, any>;
+  callService?: (domain: string, service: string, data: Record<string, unknown>) => Promise<unknown>;
+  callWS?: (message: Record<string, unknown>) => Promise<any>;
+  connection?: { sendMessagePromise?: (message: Record<string, unknown>) => Promise<any> };
+};
 
 type EchoTarget = {
   key: string;
@@ -37,6 +42,11 @@ class EchoShowEditor extends HTMLElement {
     this.config = { ...this.config, ...patch };
     this.dispatchEvent(new CustomEvent("config-changed", { bubbles: true, composed: true, detail: { config: this.config } }));
     this.render();
+  }
+  private callWS(message: Record<string, unknown>): Promise<any> {
+    if (this._hass?.callWS) return this._hass.callWS(message);
+    if (this._hass?.connection?.sendMessagePromise) return this._hass.connection.sendMessagePromise(message);
+    return Promise.reject(new Error("Home Assistant dashboard management is unavailable."));
   }
   private targets(): EchoTarget[] {
     const states = this._hass?.states || {};
@@ -87,6 +97,7 @@ class EchoShowEditor extends HTMLElement {
       <div class="section"><h3>Included lights</h3><div class="hint">Choose which lights appear on this dashboard.</div>${lights.length ? lights.map((light: any) => `<label class="camera"><input type="checkbox" data-light="${light.entity_id}" ${includedLights.has(light.entity_id) ? "checked" : ""}>${light.attributes?.friendly_name || light.entity_id}</label>`).join("") : `<div class="hint">No light entities are available.</div>`}</div>
       <div class="section"><h3>Apply to Echo Show</h3><div class="hint">Uses the TECHO5 device controls already exposed by Home Assistant. Applying changes affects only the selected device.</div>
         <div class="row"><label for="echo-target">Echo Show</label><select id="echo-target" size="${Math.min(Math.max(targets.length + 1, 2), 5)}">${targets.length ? `<option value="">Select a device</option>${targets.map((target) => `<option value="${target.key}" ${target.key === selectedTarget ? "selected" : ""}>${target.label}</option>`).join("")}` : `<option value="">No TECHO5 devices discovered</option>`}</select></div>
+        <div class="row"><button id="echo-create-dashboard" type="button" ${activeTarget ? "" : "disabled"}>Create dashboard for selected Echo</button></div><div class="hint">Creates a separate Home Assistant dashboard from these settings. It does not change the Echo's current assignment.</div><div id="echo-create-status" class="hint" aria-live="polite"></div>
         <div class="row"><label for="echo-dashboard">Dashboard</label><select id="echo-dashboard" size="${Math.min(Math.max(dashboardOptions.length, 2), 6)}">${dashboardSelect}</select></div>
         <div class="hint">${dashboardAvailabilityHint}</div>
         <div class="hint">Current assignment: ${activeTarget ? `${String(this._hass?.states[activeTarget.dashboard]?.state || "unknown")} / ${String(this._hass?.states[activeTarget.dashboardToShow]?.state || "unknown")} / idle ${String(this._hass?.states[activeTarget.idle]?.state || "unknown")}` : "Select a device to read its current settings."}</div>
@@ -129,6 +140,50 @@ class EchoShowEditor extends HTMLElement {
       const target = targets.find((item) => item.key === key);
       const options = target ? this._hass?.states[target.dashboardToShow]?.attributes?.options : [];
       this.emit({ echo_target: key, echo_dashboard: Array.isArray(options) && options.length ? options[0] : "" });
+    });
+    root.querySelector<HTMLButtonElement>("#echo-create-dashboard")?.addEventListener("click", async (event) => {
+      const button = event.currentTarget as HTMLButtonElement;
+      const status = root.querySelector<HTMLElement>("#echo-create-status");
+      const target = targets.find((item) => item.key === (root.querySelector<HTMLSelectElement>("#echo-target")?.value || ""));
+      if (!target) { if (status) status.textContent = "Select an Echo Show first."; return; }
+      button.disabled = true;
+      if (status) status.textContent = "Creating dashboard…";
+      let created: any;
+      try {
+        const existing = await this.callWS({ type: "lovelace/dashboards/list" });
+        const usedPaths = new Set<string>((Array.isArray(existing) ? existing : []).map((item: any) => String(item.url_path || "")));
+        const baseTitle = target.label.trim() || "Echo Show";
+        const slug = baseTitle.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "echo-show";
+        let urlPath = slug;
+        let suffix = 2;
+        while (usedPaths.has(urlPath)) urlPath = `${slug}-${suffix++}`;
+        const title = suffix === 2 ? baseTitle : `${baseTitle} ${suffix - 1}`;
+        created = await this.callWS({ type: "lovelace/dashboards/create", url_path: urlPath, title, show_in_sidebar: true, require_admin: false });
+        const strategyConfig = {
+          type: "custom:echo-show",
+          title,
+          included_cameras: this.config.included_cameras,
+          included_lights: this.config.included_lights,
+          menu: this.config.menu,
+          kiosk_mode: this.config.kiosk_mode,
+          camera_overlays: this.config.camera_overlays,
+          camera_spans: this.config.camera_spans,
+          camera_order: this.config.camera_order,
+          echo_target: target.key,
+          echo_dashboard: this._hass?.states[target.dashboardToShow]?.attributes?.options?.[0] || "",
+          echo_mode: this.config.echo_mode || "Streamed",
+          echo_dashboard_when_idle: this.config.echo_dashboard_when_idle,
+        };
+        await this.callWS({ type: "lovelace/config/save", url_path: urlPath, config: { strategy: strategyConfig } });
+        if (status) status.textContent = `Created “${title}” for ${target.label}. TECHO5 may need to expose it before it appears as a device option.`;
+      } catch (error) {
+        if (created?.id) {
+          try { await this.callWS({ type: "lovelace/dashboards/delete", dashboard_id: created.id }); } catch { /* Preserve the original error for the user. */ }
+        }
+        if (status) status.textContent = `Could not create the dashboard: ${String(error)}`;
+      } finally {
+        button.disabled = false;
+      }
     });
     root.querySelector<HTMLSelectElement>("#echo-dashboard")?.addEventListener("change", (event) => this.emit({ echo_dashboard: (event.target as HTMLSelectElement).value }));
     root.querySelector<HTMLSelectElement>("#echo-mode")?.addEventListener("change", (event) => this.emit({ echo_mode: (event.target as HTMLSelectElement).value }));
