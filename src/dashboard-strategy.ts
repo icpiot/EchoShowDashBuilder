@@ -3,18 +3,34 @@ import { listAvailableCameras, HomeAssistantState } from "./camera-feeds";
 export interface EchoDashboardConfig {
   title?: string;
   included_cameras?: string[];
+  included_lights?: string[];
   menu?: string[];
   kiosk_mode?: boolean;
   camera_overlays?: Record<string, { show?: boolean; horizontal?: string; vertical?: string }>;
   camera_spans?: Record<string, number>;
+  camera_order?: string[];
 }
 
 export function generateEchoDashboard(config: EchoDashboardConfig, hass: HomeAssistantState) {
   const available = listAvailableCameras(hass);
   const included = new Set(config.included_cameras ?? available.map((camera) => camera.entityId));
-  const cameras = available
+  const configuredOrder = Array.isArray(config.camera_order) ? config.camera_order : [];
+  const cameraOrder = [...configuredOrder.filter((entity) => available.some((camera) => camera.entityId === entity)), ...available.filter((camera) => !configuredOrder.includes(camera.entityId)).map((camera) => camera.entityId)];
+  const ordered = [...available].sort((a, b) => {
+    const order = cameraOrder;
+    const ai = order.indexOf(a.entityId);
+    const bi = order.indexOf(b.entityId);
+    return (ai < 0 ? Number.MAX_SAFE_INTEGER : ai) - (bi < 0 ? Number.MAX_SAFE_INTEGER : bi) || a.label.localeCompare(b.label);
+  });
+  const cameras = ordered
     .filter((camera) => included.has(camera.entityId))
     .map((camera) => ({ entity: camera.entityId, label: camera.label, name_overlay: config.camera_overlays?.[camera.entityId], span: config.camera_spans?.[camera.entityId] }));
+
+  const lights = Object.values(hass.states)
+    .filter((state: any) => String(state.entity_id).startsWith("light."))
+    .filter((state: any) => !config.included_lights || config.included_lights.includes(state.entity_id))
+    .map((state: any) => ({ entity: state.entity_id, label: state.attributes?.friendly_name || state.entity_id }))
+    .sort((a, b) => a.label.localeCompare(b.label));
 
   const menu = config.menu?.length ? config.menu : ["home", "cameras", "lights"];
   const menuItems = menu.map((path) => ({ label: path[0].toUpperCase() + path.slice(1), path, icon: path === "cameras" ? "mdi:cctv" : path === "lights" ? "mdi:lightbulb" : "mdi:home" }));
@@ -30,7 +46,7 @@ export function generateEchoDashboard(config: EchoDashboardConfig, hass: HomeAss
     views: [
       view("Home", "home"),
       view("Cameras", "cameras", [{ type: "custom:echo-camera-wall", cameras }]),
-      view("Lights", "lights"),
+      view("Lights", "lights", [{ type: "custom:echo-light-controls", lights }]),
     ],
   };
   Object.assign(dashboard, { kiosk_mode: { kiosk: Boolean(config.kiosk_mode) } });

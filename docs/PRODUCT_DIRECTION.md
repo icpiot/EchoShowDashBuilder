@@ -5,7 +5,7 @@ This document records the requirements agreed in conversation on 7 November 2026
 ## Agreed direction
 
 - Keep the owner's existing visual design as the reference, with the navigation menu at the top.
-- Provide Cameras and Lights as the first prebuilt dashboards. Define Lights in a later discussion.
+- Provide Cameras and Lights as the first prebuilt dashboards. The Lights page lists the profile's selected Home Assistant light entities, provides on/off controls, and offers brightness adjustment when a light exposes brightness.
 - Provide a Cameras setup form that lists available camera feeds and lets the user toggle each feed's inclusion in the Cameras dashboard.
 - Accommodate feeds with different image resolutions and aspect ratios, including a 180-degree camera.
 - Show the **entire image** for every included camera. Preserve its aspect ratio and do not crop it to fill a tile. Empty space around a feed is preferable to losing part of the image.
