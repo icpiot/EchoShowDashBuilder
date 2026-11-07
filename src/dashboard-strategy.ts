@@ -28,7 +28,7 @@ export function generateEchoDashboard(config: EchoDashboardConfig, hass: HomeAss
     title: config.title || "Echo Show",
     views: [
       view("Home", "home"),
-      view("Cameras", "cameras", [{ type: "custom:echo-camera-wall", cameras, min_tile_width: 240 }]),
+      view("Cameras", "cameras", [{ type: "custom:echo-camera-wall", cameras }]),
       view("Lights", "lights"),
     ],
   };

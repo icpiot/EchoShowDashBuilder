@@ -1,6 +1,6 @@
 type Hass = { states: Record<string, any>; hassUrl?: string; callWS?: (msg: any) => Promise<any> };
 
-const styles = `:host{display:block;color:var(--primary-text-color,#fff);font-family:var(--paper-font-body1_-_font-family,Arial,sans-serif)}*{box-sizing:border-box}.menu{display:flex;gap:6px;overflow:hidden;max-width:490px;margin:0 auto 8px}.menu button{flex:1;min-width:0;border:0;border-radius:10px;padding:10px 8px;background:var(--ha-card-background,#20252b);color:inherit;font:inherit;font-size:clamp(12px,2vw,18px);white-space:nowrap;cursor:pointer}.menu button.active{background:var(--primary-color,#03a9f4);color:#fff}.wall{display:grid;grid-template-columns:repeat(var(--cols,2),minmax(0,1fr));gap:var(--gap,6px)}.tile{min-width:0;position:relative;background:#090b0d;border-radius:8px;overflow:hidden;display:flex;align-items:center;justify-content:center;aspect-ratio:16/9}.tile img{display:block;width:100%;height:100%;object-fit:contain}.label{position:absolute;left:0;right:0;color:#fff;padding:5px 8px;background:linear-gradient(transparent,rgba(0,0,0,.8));font-size:clamp(11px,1.6vw,15px);text-shadow:0 1px 2px #000}.label.top{top:0;bottom:auto;background:linear-gradient(rgba(0,0,0,.8),transparent)}.label.bottom{bottom:0}.label.left{text-align:left}.label.center{text-align:center}.label.right{text-align:right}.label[hidden]{display:none}.empty{padding:16px;text-align:center;opacity:.7}`;
+const styles = `:host{display:block;color:var(--primary-text-color,#fff);font-family:var(--paper-font-body1_-_font-family,Arial,sans-serif)}*{box-sizing:border-box}.menu{display:flex;gap:6px;overflow:hidden;max-width:490px;margin:0 auto 8px}.menu button{flex:1;min-width:0;border:0;border-radius:10px;padding:10px 8px;background:var(--ha-card-background,#20252b);color:inherit;font:inherit;font-size:clamp(12px,2vw,18px);white-space:nowrap;cursor:pointer}.menu button.active{background:var(--primary-color,#03a9f4);color:#fff}.wall{display:grid;grid-template-columns:repeat(var(--cols,2),minmax(0,1fr));gap:var(--gap,6px)}.tile{min-width:0;position:relative;background:#090b0d;border-radius:8px;overflow:hidden;display:flex;align-items:center;justify-content:center;aspect-ratio:16/9;height:var(--tile-height,auto)}.tile img{display:block;width:100%;height:100%;object-fit:contain}.label{position:absolute;left:0;right:0;color:#fff;padding:5px 8px;background:linear-gradient(transparent,rgba(0,0,0,.8));font-size:clamp(11px,1.6vw,15px);text-shadow:0 1px 2px #000}.label.top{top:0;bottom:auto;background:linear-gradient(rgba(0,0,0,.8),transparent)}.label.bottom{bottom:0}.label.left{text-align:left}.label.center{text-align:center}.label.right{text-align:right}.label[hidden]{display:none}.empty{padding:16px;text-align:center;opacity:.7}`;
 
 class EchoMenu extends HTMLElement {
   private config: any = {}; private _hass?: Hass;
@@ -24,10 +24,11 @@ class EchoMenu extends HTMLElement {
 
 class EchoCameraWall extends HTMLElement {
   private config: any = {}; private _hass?: Hass; private timer?: number; private observer?: ResizeObserver;
+  private onWindowResize = () => this.updateLayout();
   setConfig(config: any) { this.config = config || {}; this.render(); }
   set hass(value: Hass) { const first = !this._hass; this._hass = value; if (first) this.refresh(); }
-  connectedCallback() { if (!this.shadowRoot) this.render(); this.observer = new ResizeObserver(() => this.updateLayout()); this.observer.observe(this); }
-  disconnectedCallback() { if (this.timer) window.clearInterval(this.timer); this.observer?.disconnect(); }
+  connectedCallback() { if (!this.shadowRoot) this.render(); this.observer = new ResizeObserver(() => this.updateLayout()); this.observer.observe(this); window.addEventListener('resize', this.onWindowResize); }
+  disconnectedCallback() { if (this.timer) window.clearInterval(this.timer); this.observer?.disconnect(); window.removeEventListener('resize', this.onWindowResize); }
   private cameras() { return Array.isArray(this.config.cameras) ? this.config.cameras : []; }
   private render() {
     const root = this.shadowRoot ?? this.attachShadow({mode:'open'});
@@ -47,7 +48,34 @@ class EchoCameraWall extends HTMLElement {
     if (this.timer) window.clearInterval(this.timer);
     const interval = Math.max(1000, Number(this.config.refresh_interval || 5000)); this.timer = window.setInterval(() => this.refresh(), interval);
   }
-  private updateLayout() { const wall = this.shadowRoot?.querySelector('.wall') as HTMLElement | null; if (!wall) return; const width=this.clientWidth || 600; const min=Number(this.config.min_tile_width || 180); wall.style.setProperty('--cols', String(Math.max(1, Math.floor(width / min)))); }
+  private updateLayout() {
+    const wall = this.shadowRoot?.querySelector('.wall') as HTMLElement | null;
+    if (!wall) return;
+    const width = this.clientWidth || 600;
+    const count = this.cameras().length;
+    const gap = 6;
+    const minimumWidth = Number(this.config.min_tile_width || 180);
+    const maxColumns = Math.min(count, Math.max(1, Math.floor((width + gap) / (minimumWidth + gap))));
+    const availableHeight = window.innerHeight - wall.getBoundingClientRect().top - 8;
+    let best: { columns: number; height: number; score: number } | undefined;
+    for (let columns = 1; columns <= maxColumns; columns++) {
+      const rows = Math.ceil(count / columns);
+      const tileWidth = (width - gap * (columns - 1)) / columns;
+      const tileHeight = (availableHeight - gap * (rows - 1)) / rows;
+      if (tileHeight < 100) continue;
+      const imageWidth = Math.min(tileWidth, tileHeight * 16 / 9);
+      const imageHeight = Math.min(tileHeight, tileWidth * 9 / 16);
+      const score = imageWidth * imageHeight;
+      if (!best || score > best.score) best = { columns, height: tileHeight, score };
+    }
+    if (!best) {
+      wall.style.setProperty('--cols', String(Math.max(1, maxColumns)));
+      wall.style.removeProperty('--tile-height');
+      return;
+    }
+    wall.style.setProperty('--cols', String(best.columns));
+    wall.style.setProperty('--tile-height', `${Math.floor(best.height)}px`);
+  }
   private refresh() {
     if (!this._hass || !this.shadowRoot) return;
     for (const tile of Array.from(this.shadowRoot.querySelectorAll<HTMLElement>('.tile'))) {
