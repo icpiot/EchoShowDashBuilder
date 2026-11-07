@@ -6,6 +6,7 @@ export interface EchoDashboardConfig {
   menu?: string[];
   kiosk_mode?: boolean;
   camera_overlays?: Record<string, { show?: boolean; horizontal?: string; vertical?: string }>;
+  camera_spans?: Record<string, number>;
 }
 
 export function generateEchoDashboard(config: EchoDashboardConfig, hass: HomeAssistantState) {
@@ -13,7 +14,7 @@ export function generateEchoDashboard(config: EchoDashboardConfig, hass: HomeAss
   const included = new Set(config.included_cameras ?? available.map((camera) => camera.entityId));
   const cameras = available
     .filter((camera) => included.has(camera.entityId))
-    .map((camera) => ({ entity: camera.entityId, label: camera.label, name_overlay: config.camera_overlays?.[camera.entityId] }));
+    .map((camera) => ({ entity: camera.entityId, label: camera.label, name_overlay: config.camera_overlays?.[camera.entityId], span: config.camera_spans?.[camera.entityId] }));
 
   const menu = config.menu?.length ? config.menu : ["home", "cameras", "lights"];
   const menuItems = menu.map((path) => ({ label: path[0].toUpperCase() + path.slice(1), path, icon: path === "cameras" ? "mdi:cctv" : path === "lights" ? "mdi:lightbulb" : "mdi:home" }));

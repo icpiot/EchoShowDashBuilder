@@ -36,6 +36,8 @@ class EchoCameraWall extends HTMLElement {
     const wall = root.querySelector('.wall')!;
     for (const camera of this.cameras()) {
       const tile = document.createElement('article'); tile.className='tile'; tile.dataset.entity=camera.entity;
+      const span = Math.max(1, Math.min(3, Number(camera.span) || 1));
+      if (span > 1) tile.style.gridColumn = `span ${span}`;
       const overlay = camera.name_overlay || {};
       const horizontal = overlay.horizontal === 'center' ? 'center' : overlay.horizontal === 'right' ? 'right' : 'left';
       const vertical = overlay.vertical === 'top' ? 'top' : 'bottom';
