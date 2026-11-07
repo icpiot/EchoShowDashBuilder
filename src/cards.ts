@@ -25,8 +25,8 @@ class EchoMenu extends HTMLElement {
 class EchoCameraWall extends HTMLElement {
   private config: any = {}; private _hass?: Hass; private timer?: number; private observer?: ResizeObserver;
   setConfig(config: any) { this.config = config || {}; this.render(); }
-  set hass(value: Hass) { this._hass = value; this.refresh(); }
-  connectedCallback() { this.render(); this.observer = new ResizeObserver(() => this.updateLayout()); this.observer.observe(this); }
+  set hass(value: Hass) { const first = !this._hass; this._hass = value; if (first) this.refresh(); }
+  connectedCallback() { if (!this.shadowRoot) this.render(); this.observer = new ResizeObserver(() => this.updateLayout()); this.observer.observe(this); }
   disconnectedCallback() { if (this.timer) window.clearInterval(this.timer); this.observer?.disconnect(); }
   private cameras() { return Array.isArray(this.config.cameras) ? this.config.cameras : []; }
   private render() {
@@ -48,7 +48,35 @@ class EchoCameraWall extends HTMLElement {
     const interval = Math.max(1000, Number(this.config.refresh_interval || 5000)); this.timer = window.setInterval(() => this.refresh(), interval);
   }
   private updateLayout() { const wall = this.shadowRoot?.querySelector('.wall') as HTMLElement | null; if (!wall) return; const width=this.clientWidth || 600; const min=Number(this.config.min_tile_width || 180); wall.style.setProperty('--cols', String(Math.max(1, Math.floor(width / min)))); }
-  private refresh() { if (!this._hass || !this.shadowRoot) return; for (const tile of Array.from(this.shadowRoot.querySelectorAll<HTMLElement>('.tile'))) { const entity=tile.dataset.entity; if (!entity) continue; const img=tile.querySelector('img'); if (!img || img.dataset.loading==='1') continue; const state=this._hass.states[entity]; const source=state?.attributes?.entity_picture; if (!source) continue; const width=Math.max(240, Math.round(tile.clientWidth * Math.min(window.devicePixelRatio || 1, 2))); const next=new Image(); next.dataset.loading='1'; next.onload=()=>{ img.src=next.src; const ratio=next.naturalWidth / next.naturalHeight; if (Number.isFinite(ratio) && ratio > 0) tile.style.aspectRatio=String(ratio); next.dataset.loading='0'; }; next.onerror=()=>{ tile.dataset.imageError='1'; next.dataset.loading='0'; }; const url=new URL(source, window.location.origin); url.searchParams.set('width',String(width)); url.searchParams.set('_',String(Date.now())); next.src=url.toString(); } }
+  private refresh() {
+    if (!this._hass || !this.shadowRoot) return;
+    for (const tile of Array.from(this.shadowRoot.querySelectorAll<HTMLElement>('.tile'))) {
+      const entity = tile.dataset.entity;
+      if (!entity) continue;
+      const img = tile.querySelector('img');
+      if (!img || img.dataset.loading === '1') continue;
+      const source = this._hass.states[entity]?.attributes?.entity_picture;
+      if (!source) continue;
+      const width = Math.max(240, Math.round(tile.clientWidth * Math.min(window.devicePixelRatio || 1, 2)));
+      const url = new URL(source, window.location.origin);
+      url.searchParams.set('width', String(width));
+      url.searchParams.set('_', String(Date.now()));
+      img.dataset.loading = '1';
+      const next = new Image();
+      next.onload = () => {
+        img.src = next.src;
+        const ratio = next.naturalWidth / next.naturalHeight;
+        if (Number.isFinite(ratio) && ratio > 0) tile.style.aspectRatio = String(ratio);
+        delete tile.dataset.imageError;
+        img.dataset.loading = '0';
+      };
+      next.onerror = () => {
+        tile.dataset.imageError = '1';
+        img.dataset.loading = '0';
+      };
+      next.src = url.toString();
+    }
+  }
 }
 
 if (!customElements.get('echo-menu')) customElements.define('echo-menu', EchoMenu);
