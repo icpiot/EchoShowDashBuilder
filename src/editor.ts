@@ -10,6 +10,23 @@ type EchoTarget = {
   idle: string;
 };
 
+function moveCameraToPosition(order: string[], entity: string, requestedPosition: number): string[] {
+  const next = [...order];
+  const from = next.indexOf(entity);
+  if (from < 0 || !Number.isFinite(requestedPosition)) return next;
+  const to = Math.max(0, Math.min(next.length - 1, Math.trunc(requestedPosition)));
+  if (from === to) return next;
+
+  // Shift every camera in the crossed range by one so positions stay contiguous.
+  if (from < to) {
+    for (let index = from; index < to; index += 1) next[index] = next[index + 1];
+  } else {
+    for (let index = from; index > to; index -= 1) next[index] = next[index - 1];
+  }
+  next[to] = entity;
+  return next;
+}
+
 class EchoShowEditor extends HTMLElement {
   private config: any = {};
   private _hass?: Hass;
@@ -97,14 +114,7 @@ class EchoShowEditor extends HTMLElement {
     }));
     root.querySelectorAll<HTMLSelectElement>("[data-order]").forEach((input) => input.addEventListener("change", () => {
       const entity = input.dataset.order || "";
-      const from = cameraOrder.indexOf(entity);
-      const to = Number(input.value) - 1;
-      const next = [...cameraOrder];
-      if (from >= 0 && to >= 0 && to < next.length) {
-        next.splice(from, 1);
-        next.splice(to, 0, entity);
-        this.emit({ camera_order: next });
-      }
+      this.emit({ camera_order: moveCameraToPosition(cameraOrder, entity, Number(input.value) - 1) });
     }));
     root.querySelector<HTMLSelectElement>("#echo-target")?.addEventListener("change", (event) => {
       const key = (event.target as HTMLSelectElement).value;
