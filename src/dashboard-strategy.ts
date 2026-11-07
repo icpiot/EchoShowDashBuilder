@@ -15,7 +15,7 @@ export function generateEchoDashboard(config: EchoDashboardConfig, hass: HomeAss
     .filter((camera) => included.has(camera.entityId))
     .map((camera) => ({ entity: camera.entityId, label: camera.label, name_overlay: config.camera_overlays?.[camera.entityId] }));
 
-  const menu = config.menu?.length ? config.menu : ["cameras", "lights"];
+  const menu = config.menu?.length ? config.menu : ["home", "cameras", "lights"];
   const menuItems = menu.map((path) => ({ label: path[0].toUpperCase() + path.slice(1), path, icon: path === "cameras" ? "mdi:cctv" : path === "lights" ? "mdi:lightbulb" : "mdi:home" }));
   const menuCard = (active_path: string) => ({ type: "custom:echo-menu", items: menuItems, active_path });
   const dashboard = {

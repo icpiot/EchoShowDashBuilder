@@ -38,7 +38,7 @@ class EchoShowEditor extends HTMLElement {
     const cameras = this._hass ? listAvailableCameras(this._hass) : [];
     const included = new Set<string>(this.config.included_cameras || cameras.map((camera) => camera.entityId));
     const overlays = this.config.camera_overlays || {};
-    const menu = Array.isArray(this.config.menu) ? this.config.menu : ["cameras", "lights"];
+    const menu = Array.isArray(this.config.menu) ? this.config.menu : ["home", "cameras", "lights"];
     const targets = this.targets();
     const selectedTarget = String(this.config.echo_target || "");
     const selectedDashboard = String(this.config.echo_dashboard || this.config.title || "Echo Show HTML Dash Dev");
