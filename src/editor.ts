@@ -507,7 +507,9 @@ class EchoShowEditor extends HTMLElement {
       this.selectedProfileId = id;
       this.emit({ saved_profiles: [...savedProfiles.filter((item) => item.id !== id), profile], active_profile_id: id }, true);
     });
-    root.querySelectorAll<HTMLInputElement>("[data-menu-label], [data-menu-icon], [data-menu-custom-destination]").forEach((input) => input.addEventListener("input", () => this.emitCurrentConfig()));
+    // Text fields commit on change (blur/Enter), not every keystroke.  Emitting
+    // config-changed while typing makes Home Assistant recreate this editor and
+    // returns its scroll position to the top.
     root.querySelectorAll<HTMLInputElement>("[data-menu-camera], [data-menu-light], [data-menu-temperature], [data-overlay-show]").forEach((input) => input.addEventListener("change", () => this.emitCurrentConfig()));
     root.querySelectorAll<HTMLSelectElement>("[data-menu-order], [data-menu-action], [data-menu-destination], [data-order], [data-overlay-h], [data-overlay-v], [data-span], [data-camera-refresh], #camera-refresh-default, #kiosk-mode").forEach((input) => input.addEventListener("change", () => this.emitCurrentConfig()));
     const updateMenus = (rerender = false) => {
