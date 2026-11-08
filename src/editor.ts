@@ -16,6 +16,8 @@ type EchoTarget = {
   idle: string;
 };
 
+type DashboardDestination = { path: string; label: string };
+
 function moveCameraToPosition(order: string[], entity: string, requestedPosition: number): string[] {
   const next = [...order];
   const from = next.indexOf(entity);
@@ -84,6 +86,10 @@ class EchoShowEditor extends HTMLElement {
   private managedDashboardsLoaded = false;
   private managedDashboardsLoading = false;
   private managedDashboardsError = "";
+  private dashboardDestinations: DashboardDestination[] = [{ path: "/lovelace/0", label: "Overview — /lovelace/0" }];
+  private dashboardDestinationsLoaded = false;
+  private dashboardDestinationsLoading = false;
+  private dashboardDestinationsError = "";
   private areas: Array<{ area_id: string; name: string }> = [];
   private entityAreas: Record<string, string> = {};
   private areaRegistryLoaded = false;
@@ -111,7 +117,9 @@ class EchoShowEditor extends HTMLElement {
         lights: selected("[data-menu-light]", existing?.lights),
         temperatures: selected("[data-menu-temperature]", existing?.temperatures),
         action: card.querySelector<HTMLSelectElement>("[data-menu-action]")?.value === "navigate" ? "navigate" : "view",
-        destination: card.querySelector<HTMLInputElement>("[data-menu-destination]")?.value.trim() || "",
+        destination: card.querySelector<HTMLSelectElement>("[data-menu-destination]")?.value === "__custom__"
+          ? card.querySelector<HTMLInputElement>("[data-menu-custom-destination]")?.value.trim() || ""
+          : card.querySelector<HTMLSelectElement>("[data-menu-destination]")?.value || "",
       };
     });
     const cameraOrder = Array.from(root.querySelectorAll<HTMLSelectElement>("[data-order]"))
@@ -174,6 +182,7 @@ class EchoShowEditor extends HTMLElement {
     this._hass = value;
     if (firstHass && !this.shadowRoot?.querySelector("[data-menu-card]")) this.render();
     if (!this.managedDashboardsLoaded && !this.managedDashboardsLoading) void this.loadManagedDashboards();
+    if (!this.dashboardDestinationsLoaded && !this.dashboardDestinationsLoading) void this.loadDashboardDestinations();
     if (!this.areaRegistryLoaded && !this.areaRegistryLoading) void this.loadAreaRegistry();
   }
   connectedCallback() { this.render(); }
@@ -212,6 +221,42 @@ class EchoShowEditor extends HTMLElement {
       this.managedDashboardsError = String(error);
     } finally {
       this.managedDashboardsLoading = false;
+    }
+    this.render();
+  }
+  private async loadDashboardDestinations() {
+    this.dashboardDestinationsLoading = true;
+    try {
+      const dashboards = await this.callWS({ type: "lovelace/dashboards/list" });
+      const listed = Array.isArray(dashboards) ? dashboards : [];
+      const destinations: DashboardDestination[] = [{ path: "/lovelace/0", label: "Overview — /lovelace/0" }];
+      for (const dashboard of listed) {
+        const urlPath = String(dashboard?.url_path || "").trim();
+        if (!urlPath) continue;
+        const title = String(dashboard?.title || urlPath);
+        try {
+          const config = await this.callWS({ type: "lovelace/config", url_path: urlPath });
+          const views = Array.isArray(config?.views) ? config.views : [];
+          if (views.length) {
+            views.forEach((view: any, index: number) => {
+              const viewPath = String(view?.path || index);
+              destinations.push({ path: `/${urlPath}/${viewPath}`, label: `${title} — ${String(view?.title || viewPath)} — /${urlPath}/${viewPath}` });
+            });
+          } else {
+            destinations.push({ path: `/${urlPath}/0`, label: `${title} — /${urlPath}/0` });
+          }
+        } catch {
+          destinations.push({ path: `/${urlPath}/0`, label: `${title} — /${urlPath}/0` });
+        }
+      }
+      this.dashboardDestinations = Array.from(new Map(destinations.map((item) => [item.path, item])).values())
+        .sort((a, b) => a.label.localeCompare(b.label));
+      this.dashboardDestinationsError = "";
+    } catch (error) {
+      this.dashboardDestinationsError = String(error);
+    } finally {
+      this.dashboardDestinationsLoading = false;
+      this.dashboardDestinationsLoaded = true;
     }
     this.render();
   }
@@ -328,11 +373,15 @@ class EchoShowEditor extends HTMLElement {
       const menuLights = lights.filter((light: any) => matchesArea(String(light.entity_id)));
       const menuTemperatures = temperatures.filter((sensor: any) => matchesArea(String(sensor.entity_id)));
       const areaSelect = `<label class="area-filter">Area filter <select data-menu-area><option value="" ${currentArea === "" ? "selected" : ""}>All areas</option><option value="__no_area__" ${currentArea === "__no_area__" ? "selected" : ""}>No area assigned</option>${this.areas.map((area) => `<option value="${escapeHtml(area.area_id)}" ${currentArea === area.area_id ? "selected" : ""}>${escapeHtml(area.name)}</option>`).join("")}</select></label>`;
+      const destination = String(menu.destination || "");
+      const destinationIsListed = this.dashboardDestinations.some((item) => item.path === destination);
+      const destinationSelect = `<label>Dashboard/view <select data-menu-destination><option value="">Select a dashboard or view</option>${this.dashboardDestinations.map((item) => `<option value="${escapeHtml(item.path)}" ${item.path === destination ? "selected" : ""}>${escapeHtml(item.label)}</option>`).join("")}<option value="__custom__" ${destination && !destinationIsListed ? "selected" : ""}>Custom path…</option></select></label>`;
+      const customDestination = destination && !destinationIsListed ? `<label>Custom path <input type="text" data-menu-custom-destination value="${escapeHtml(destination)}" placeholder="/lovelace/0"></label>` : "";
       const menuOpen = EchoShowEditor.openMenuCards[menu.id] ?? (index === 0 || isLightsMenu);
       return `<details class="menu-config" data-menu-card="${escapeHtml(menu.id)}" ${menuOpen ? "open" : ""}>
       <summary>Menu ${index + 1}: ${escapeHtml(menu.label)}</summary>
       <div class="row"><label>Menu order <select data-menu-order>${menuProfiles.map((_, optionIndex) => `<option value="${optionIndex + 1}" ${index === optionIndex ? "selected" : ""}>${optionIndex + 1}</option>`).join("")}</select></label><label>Menu name <input type="text" data-menu-label value="${escapeHtml(menu.label)}"></label><label>Icon <input type="text" data-menu-icon value="${escapeHtml(menu.icon || "mdi:view-dashboard")}" placeholder="mdi:home"></label></div>
-      <div class="row"><label>Action <select data-menu-action><option value="view" ${menu.action === "navigate" ? "" : "selected"}>Show this menu</option><option value="navigate" ${menu.action === "navigate" ? "selected" : ""}>Navigate to Dashboard</option></select></label>${menu.action === "navigate" ? `<label>Dashboard/view path <input type="text" data-menu-destination value="${escapeHtml(menu.destination || "")}" placeholder="/lovelace/0"></label>` : ""}</div>${menu.action === "navigate" ? `<div class="hint">Enter a Home Assistant path such as /lovelace/0 or /dashboard-security/0. This opens in the current session and does not change the Echo assignment.</div>` : ""}
+      <div class="row"><label>Action <select data-menu-action><option value="view" ${menu.action === "navigate" ? "" : "selected"}>Show this menu</option><option value="navigate" ${menu.action === "navigate" ? "selected" : ""}>Navigate to Dashboard</option></select></label>${menu.action === "navigate" ? `${destinationSelect}${customDestination}` : ""}</div>${menu.action === "navigate" ? `<div class="hint">Choose any available Home Assistant dashboard or view. Custom paths are limited to this Home Assistant instance and open in the current session without changing the Echo assignment.</div>${this.dashboardDestinationsLoading ? `<div class="hint">Loading dashboards and views…</div>` : ""}${this.dashboardDestinationsError ? `<div class="hint">Could not load the dashboard list: ${escapeHtml(this.dashboardDestinationsError)}</div>` : ""}` : ""}
       <div class="row">${areaSelect}</div>${this.areaRegistryError ? `<div class="hint">Area filters are unavailable: ${escapeHtml(this.areaRegistryError)}</div>` : this.areaRegistryLoading ? `<div class="hint">Loading Home Assistant areas…</div>` : `<div class="hint">Choose an area to narrow the camera, light, and temperature lists for this menu, then tick the entities you want to show.</div>`}
       ${menu.action === "navigate" ? "" : `<details class="content-picker" ${(pickerOpen[0] ?? (menu.cameras || []).length > 0) ? "open" : ""}><summary>Cameras · ${(menu.cameras || []).length} selected</summary>${menuCameras.length ? menuCameras.map((camera) => `<div class="camera-choice"><label class="camera"><input type="checkbox" data-menu-camera value="${escapeHtml(camera.entityId)}" ${(menu.cameras || []).includes(camera.entityId) ? "checked" : ""}>${escapeHtml(camera.label)}</label>${(menu.cameras || []).includes(camera.entityId) ? cameraAppearance(camera, menu.id) : ""}</div>`).join("") : `<div class="hint">No cameras are available in this area.</div>`}</details>
       <details class="content-picker" ${(pickerOpen[1] ?? isLightsMenu) ? "open" : ""}><summary>Choose lights · ${(menu.lights || []).length} selected</summary>${menuLights.length ? menuLights.map((light: any) => `<label class="camera"><input type="checkbox" data-menu-light value="${escapeHtml(light.entity_id)}" ${(menu.lights || []).includes(light.entity_id) ? "checked" : ""}>${escapeHtml(light.attributes?.friendly_name || light.entity_id)}</label>`).join("") : `<div class="hint">No lights are available in this area.</div>`}</details>
@@ -412,7 +461,9 @@ class EchoShowEditor extends HTMLElement {
         lights: readSelection("[data-menu-light]", existing?.lights),
         temperatures: readSelection("[data-menu-temperature]", existing?.temperatures),
         action: card.querySelector<HTMLSelectElement>("[data-menu-action]")?.value === "navigate" ? "navigate" : "view",
-        destination: card.querySelector<HTMLInputElement>("[data-menu-destination]")?.value.trim() || "",
+        destination: card.querySelector<HTMLSelectElement>("[data-menu-destination]")?.value === "__custom__"
+          ? card.querySelector<HTMLInputElement>("[data-menu-custom-destination]")?.value.trim() || ""
+          : card.querySelector<HTMLSelectElement>("[data-menu-destination]")?.value || "",
       };
     });
     const rememberOpenPickers = () => {
@@ -456,9 +507,9 @@ class EchoShowEditor extends HTMLElement {
       this.selectedProfileId = id;
       this.emit({ saved_profiles: [...savedProfiles.filter((item) => item.id !== id), profile], active_profile_id: id }, true);
     });
-    root.querySelectorAll<HTMLInputElement>("[data-menu-label], [data-menu-icon], [data-menu-destination]").forEach((input) => input.addEventListener("input", () => this.emitCurrentConfig()));
+    root.querySelectorAll<HTMLInputElement>("[data-menu-label], [data-menu-icon], [data-menu-custom-destination]").forEach((input) => input.addEventListener("input", () => this.emitCurrentConfig()));
     root.querySelectorAll<HTMLInputElement>("[data-menu-camera], [data-menu-light], [data-menu-temperature], [data-overlay-show]").forEach((input) => input.addEventListener("change", () => this.emitCurrentConfig()));
-    root.querySelectorAll<HTMLSelectElement>("[data-menu-order], [data-menu-action], [data-order], [data-overlay-h], [data-overlay-v], [data-span], [data-camera-refresh], #camera-refresh-default, #kiosk-mode").forEach((input) => input.addEventListener("change", () => this.emitCurrentConfig()));
+    root.querySelectorAll<HTMLSelectElement>("[data-menu-order], [data-menu-action], [data-menu-destination], [data-order], [data-overlay-h], [data-overlay-v], [data-span], [data-camera-refresh], #camera-refresh-default, #kiosk-mode").forEach((input) => input.addEventListener("change", () => this.emitCurrentConfig()));
     const updateMenus = (rerender = false) => {
       this.emit({ menus: readMenuProfiles() }, rerender);
       if (!rerender) {
@@ -481,7 +532,7 @@ class EchoShowEditor extends HTMLElement {
         });
       }
     };
-    root.querySelectorAll<HTMLInputElement>("[data-menu-label], [data-menu-icon], [data-menu-destination]").forEach((input) => input.addEventListener("change", () => {
+    root.querySelectorAll<HTMLInputElement>("[data-menu-label], [data-menu-icon], [data-menu-custom-destination]").forEach((input) => input.addEventListener("change", () => {
       const card = input.closest<HTMLElement>("[data-menu-card]");
       const index = Array.from(root.querySelectorAll("[data-menu-card]")).indexOf(card!);
       const label = card?.querySelector<HTMLInputElement>("[data-menu-label]")?.value.trim() || `Menu ${index + 1}`;
@@ -491,13 +542,9 @@ class EchoShowEditor extends HTMLElement {
     root.querySelectorAll<HTMLSelectElement>("[data-menu-action]").forEach((select) => select.addEventListener("change", () => {
       const card = select.closest<HTMLElement>("[data-menu-card]");
       const action = select.value === "navigate" ? "navigate" : "view";
-      if (action === "navigate") {
-        const destination = card?.querySelector<HTMLInputElement>("[data-menu-destination]")?.value.trim() || "";
-        if (destination && !localDashboardPath(destination)) {
-          window.alert("Enter a Home Assistant path beginning with /, for example /lovelace/0.");
-          select.value = "view";
-        }
-      }
+      this.emit({ menus: readMenuProfiles() }, true);
+    }));
+    root.querySelectorAll<HTMLSelectElement>("[data-menu-destination]").forEach((select) => select.addEventListener("change", () => {
       this.emit({ menus: readMenuProfiles() }, true);
     }));
     root.querySelectorAll<HTMLSelectElement>("[data-menu-order]").forEach((select) => select.addEventListener("change", () => {
