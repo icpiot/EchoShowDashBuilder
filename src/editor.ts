@@ -200,6 +200,19 @@ class EchoShowEditor extends HTMLElement {
     if (this._hass?.connection?.sendMessagePromise) return this._hass.connection.sendMessagePromise(message);
     return Promise.reject(new Error("Home Assistant dashboard management is unavailable."));
   }
+  private async persistBuilderConfig(config: any): Promise<void> {
+    const masterUrlPath = window.location.pathname.split("/").filter(Boolean)[0];
+    if (!masterUrlPath) throw new Error("Could not identify this builder dashboard to save the current setup.");
+    const masterDashboard = await this.callWS({ type: "lovelace/config", url_path: masterUrlPath });
+    if (masterDashboard?.strategy?.type !== "custom:echo-show" || masterDashboard.strategy.echo_managed) {
+      throw new Error("This setup can only be saved from the Echo dashboard builder.");
+    }
+    await this.callWS({
+      type: "lovelace/config/save",
+      url_path: masterUrlPath,
+      config: { strategy: { ...masterDashboard.strategy, ...config, echo_managed: false } },
+    });
+  }
   private async loadManagedDashboards() {
     this.managedDashboardsLoading = true;
     try {
@@ -423,7 +436,8 @@ class EchoShowEditor extends HTMLElement {
         <div class="row"><label for="echo-target">Echo Show</label><select id="echo-target" size="${Math.min(Math.max(targets.length + 1, 2), 5)}">${targets.length ? `<option value="">Select a device</option>${targets.map((target) => `<option value="${target.key}" ${target.key === selectedTarget ? "selected" : ""}>${target.label}</option>`).join("")}` : `<option value="">No TECHO5 devices discovered</option>`}</select></div>
         <div class="row"><label for="echo-mode">Presentation</label><select id="echo-mode"><option ${selectedMode === "Streamed" ? "selected" : ""}>Streamed</option><option ${selectedMode === "Drawn on the device" ? "selected" : ""}>Drawn on the device</option></select></div>
         <div class="row"><input id="echo-idle" type="checkbox" ${selectedIdle ? "checked" : ""}><label for="echo-idle">Dashboard when idle</label></div>
-        <div class="row"><button id="echo-create-dashboard" type="button" ${activeTarget ? "" : "disabled"}>Apply setup to Echo</button></div><div id="echo-create-status" class="hint" aria-live="polite"></div>
+        <div class="row"><button id="echo-load-attached" type="button" ${activeTarget ? "" : "disabled"}>Load current Echo setup into builder</button><button id="echo-create-dashboard" type="button" ${activeTarget ? "" : "disabled"}>Apply setup to Echo</button></div><div id="echo-create-status" class="hint" aria-live="polite"></div>
+        <div class="hint">Load current Echo setup is for recovering an already-applied setup into this builder. It does not change the Echo.</div>
         <div class="hint">Current assignment: ${activeTarget ? `${String(this._hass?.states[activeTarget.dashboard]?.state || "unknown")} / ${String(this._hass?.states[activeTarget.dashboardToShow]?.state || "unknown")} / idle ${String(this._hass?.states[activeTarget.idle]?.state || "unknown")}` : "Select a device to read its current settings."}</div>
       </div>
       <div class="section"><h3>Echo dashboards applied from this builder</h3><div class="hint">The list shows dashboards created by this builder. Applying a new setup replaces the previous builder dashboard for that same Echo; setups saved above are kept.</div>${managedDashboardList}<div id="managed-delete-status" class="hint" aria-live="polite"></div></div>
@@ -612,6 +626,47 @@ class EchoShowEditor extends HTMLElement {
         echo_dashboard_when_idle: Boolean(target && this._hass?.states[target.idle]?.state === "on"),
       });
     });
+    root.querySelector<HTMLButtonElement>("#echo-load-attached")?.addEventListener("click", async (event) => {
+      const button = event.currentTarget as HTMLButtonElement;
+      let status = root.querySelector<HTMLElement>("#echo-create-status");
+      const target = targets.find((item) => item.key === (root.querySelector<HTMLSelectElement>("#echo-target")?.value || ""));
+      const managed = target && this.managedDashboards.find((dashboard) => dashboard.target === target.key);
+      if (!target || !managed) { if (status) status.textContent = "There is no builder dashboard currently applied to that Echo Show."; return; }
+      button.disabled = true;
+      if (status) status.textContent = "Loading the current Echo setup into this builder…";
+      try {
+        const applied = await this.callWS({ type: "lovelace/config", url_path: managed.url_path });
+        const strategy = applied?.strategy;
+        if (strategy?.type !== "custom:echo-show" || strategy.echo_managed !== true) throw new Error("The selected dashboard is not a dashboard created by this builder.");
+        const restored = {
+          ...this.config,
+          menus: strategy.menus || [],
+          included_cameras: strategy.included_cameras,
+          included_lights: strategy.included_lights,
+          included_temperatures: strategy.included_temperatures,
+          menu: strategy.menu,
+          camera_overlays: strategy.camera_overlays || {},
+          camera_spans: strategy.camera_spans || {},
+          camera_order: strategy.camera_order || [],
+          camera_refresh_interval: strategy.camera_refresh_interval || 3000,
+          camera_refresh_intervals: strategy.camera_refresh_intervals || {},
+          echo_target: target.key,
+          echo_mode: strategy.echo_mode || "Streamed",
+          echo_dashboard_when_idle: Boolean(strategy.echo_dashboard_when_idle),
+          echo_managed: false,
+        };
+        await this.persistBuilderConfig(restored);
+        this.config = restored;
+        this.render();
+        status = this.shadowRoot?.querySelector<HTMLElement>("#echo-create-status") || null;
+        if (status) status.textContent = `Loaded and saved the current ${target.label} setup in this builder. The Echo was not changed.`;
+      } catch (error) {
+        if (status) status.textContent = `Could not load the current Echo setup: ${String(error)}`;
+      } finally {
+        const currentButton = this.shadowRoot?.querySelector<HTMLButtonElement>("#echo-load-attached");
+        if (currentButton) currentButton.disabled = false;
+      }
+    });
     root.querySelector<HTMLButtonElement>("#echo-create-dashboard")?.addEventListener("click", async (event) => {
       const button = event.currentTarget as HTMLButtonElement;
       let status = root.querySelector<HTMLElement>("#echo-create-status");
@@ -623,9 +678,17 @@ class EchoShowEditor extends HTMLElement {
       let attached = false;
       let priorManagedDashboards: Array<{ id: string; title: string; url_path: string; target: string }> = [];
       try {
-        const configuredMenus = getMenuProfiles(this.getCurrentConfig(), cameras, lights, temperatures);
+        // Applying is also the point at which the working builder setup becomes
+        // durable.  Without this, the generated Echo dashboard could contain
+        // newer menus than the builder the user returns to edit.
+        const currentConfig = this.getCurrentConfig();
+        const configuredMenus = getMenuProfiles(currentConfig, cameras, lights, temperatures);
         const invalidNavigation = configuredMenus.find((menu) => menu.action === "navigate" && !localDashboardPath(menu.destination));
         if (invalidNavigation) throw new Error(`Menu “${invalidNavigation.label}” needs a valid Home Assistant destination path, such as /lovelace/0.`);
+        if (!this.config.echo_managed) {
+          await this.persistBuilderConfig(currentConfig);
+          this.config = { ...currentConfig, echo_managed: false };
+        }
         const existing = await this.callWS({ type: "lovelace/dashboards/list" });
         const storageDashboards = (Array.isArray(existing) ? existing : []).filter((item: any) => item.mode === "storage" && item.id && item.url_path);
         const managedForTarget = await Promise.all(storageDashboards.map(async (dashboard: any) => {
@@ -652,19 +715,19 @@ class EchoShowEditor extends HTMLElement {
           title,
           menus,
           echo_managed: true,
-          included_cameras: this.config.included_cameras,
-          included_lights: this.config.included_lights,
-          menu: this.config.menu,
-          kiosk_mode: kioskModeSetting(this.getCurrentConfig().kiosk_mode, "enabled"),
-          camera_overlays: this.config.camera_overlays,
-          camera_spans: this.config.camera_spans,
-          camera_order: this.config.camera_order,
-          camera_refresh_interval: this.config.camera_refresh_interval,
-          camera_refresh_intervals: this.config.camera_refresh_intervals,
+          included_cameras: currentConfig.included_cameras,
+          included_lights: currentConfig.included_lights,
+          menu: currentConfig.menu,
+          kiosk_mode: kioskModeSetting(currentConfig.kiosk_mode, "enabled"),
+          camera_overlays: currentConfig.camera_overlays,
+          camera_spans: currentConfig.camera_spans,
+          camera_order: currentConfig.camera_order,
+          camera_refresh_interval: currentConfig.camera_refresh_interval,
+          camera_refresh_intervals: currentConfig.camera_refresh_intervals,
           echo_target: target.key,
           echo_dashboard: title,
-          echo_mode: this.config.echo_mode || "Streamed",
-          echo_dashboard_when_idle: this.config.echo_dashboard_when_idle,
+          echo_mode: currentConfig.echo_mode || "Streamed",
+          echo_dashboard_when_idle: currentConfig.echo_dashboard_when_idle,
         };
         await this.callWS({ type: "lovelace/config/save", url_path: urlPath, config: { strategy: strategyConfig } });
         const mode = root.querySelector<HTMLSelectElement>("#echo-mode")?.value || "Streamed";
