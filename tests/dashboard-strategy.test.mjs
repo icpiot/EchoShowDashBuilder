@@ -29,7 +29,7 @@ test("keeps navigate menu items but does not make a local view for them", () => 
     ],
     kiosk_mode: "inherit",
   }, hass);
-  assert.deepEqual(dashboard.views.map((view) => view.path), ["cameras", "camera-camera-front"]);
+  assert.deepEqual(dashboard.views.map((view) => view.path), ["cameras"]);
   assert.equal(dashboard.views[0].cards[0].cards[0].items[1].destination, "/lovelace/0");
   assert.equal("kiosk_mode" in dashboard, false);
 });

@@ -60,22 +60,13 @@ class EchoCameraWall extends HTMLElement {
       const horizontal = overlay.horizontal === 'center' ? 'center' : overlay.horizontal === 'right' ? 'right' : 'left';
       const vertical = overlay.vertical === 'top' ? 'top' : 'bottom';
       tile.innerHTML = `<img alt="${camera.label || camera.entity}"><span class="label ${vertical} ${horizontal}" ${overlay.show === false ? 'hidden' : ''}>${camera.label || camera.entity}</span>`;
-      tile.addEventListener('click', () => this.openFeed(String(camera.detail_path || '')));
+      tile.addEventListener('click', () => this.dispatchEvent(new CustomEvent('hass-more-info', { bubbles: true, composed: true, detail: { entityId: camera.entity } })));
       wall.appendChild(tile);
     }
     if (!this.cameras().length) wall.innerHTML='<div class="empty">No cameras are configured.</div>';
     this.updateLayout(); this.refresh();
     if (this.timer) window.clearInterval(this.timer);
     this.timer = window.setInterval(() => this.refresh(), 1000);
-  }
-  private openFeed(path: string) {
-    if (!path) return;
-    const segments = window.location.pathname.split('/').filter(Boolean);
-    const dashboardBase = segments.length > 1 ? `/${segments.slice(0, -1).join('/')}` : window.location.pathname.replace(/\/$/, '');
-    const navigationPath = `${dashboardBase}/${encodeURIComponent(path)}`;
-    this.dispatchEvent(new CustomEvent('hass-navigate', {bubbles:true, composed:true, detail:{navigation_path:navigationPath}}));
-    window.history.pushState(null, '', navigationPath);
-    window.dispatchEvent(new CustomEvent('location-changed', { detail: { replace: false } }));
   }
   private updateLayout() {
     const wall = this.shadowRoot?.querySelector('.wall') as HTMLElement | null;
