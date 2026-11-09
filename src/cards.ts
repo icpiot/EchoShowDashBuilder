@@ -60,7 +60,9 @@ class EchoCameraWall extends HTMLElement {
       const horizontal = overlay.horizontal === 'center' ? 'center' : overlay.horizontal === 'right' ? 'right' : 'left';
       const vertical = overlay.vertical === 'top' ? 'top' : 'bottom';
       tile.innerHTML = `<img alt="${camera.label || camera.entity}"><span class="label ${vertical} ${horizontal}" ${overlay.show === false ? 'hidden' : ''}>${camera.label || camera.entity}</span>`;
-      tile.addEventListener('click', () => this.dispatchEvent(new CustomEvent('hass-more-info',{bubbles:true,composed:true,detail:{entityId:camera.entity}})));
+      // Keep the streamed camera wall in place. Home Assistant's more-info
+      // player is unsupported on the Echo and replaces the preview with an
+      // "Unable to play media" dialog.
       wall.appendChild(tile);
     }
     if (!this.cameras().length) wall.innerHTML='<div class="empty">No cameras are configured.</div>';

@@ -1,5 +1,6 @@
 import { listAvailableCameras } from "./camera-feeds";
 import { kioskModeSetting, localDashboardPath, type EchoMenuConfig, type EchoSavedDashboardProfile } from "./dashboard-strategy";
+import { reconcileCardLibrary, type EchoCardLibraryEntry, type HolderCard } from "./card-library";
 
 type Hass = {
   states: Record<string, any>;
@@ -61,6 +62,8 @@ function getMenuProfiles(config: any, cameras: Array<{ entityId: string }>, ligh
       temperatures: Array.isArray(menu.temperatures) ? menu.temperatures : [],
       action: menu.action === "navigate" ? "navigate" : "view",
       destination: String(menu.destination || ""),
+      source: menu.source === "lovelace_card" ? "lovelace_card" : "menu",
+      lovelace_card_id: String(menu.lovelace_card_id || ""),
     }));
   }
   const legacy = Array.isArray(config.menu) && config.menu.length ? config.menu : ["cameras"];
@@ -120,6 +123,8 @@ class EchoShowEditor extends HTMLElement {
         destination: card.querySelector<HTMLSelectElement>("[data-menu-destination]")?.value === "__custom__"
           ? card.querySelector<HTMLInputElement>("[data-menu-custom-destination]")?.value.trim() || ""
           : card.querySelector<HTMLSelectElement>("[data-menu-destination]")?.value || "",
+        source: card.querySelector<HTMLSelectElement>("[data-menu-source]")?.value === "lovelace_card" ? "lovelace_card" : "menu",
+        lovelace_card_id: card.querySelector<HTMLSelectElement>("[data-menu-lovelace-card]")?.value || "",
       };
     });
     const cameraOrder = Array.from(root.querySelectorAll<HTMLSelectElement>("[data-order]"))
@@ -212,6 +217,34 @@ class EchoShowEditor extends HTMLElement {
       url_path: masterUrlPath,
       config: { strategy: { ...masterDashboard.strategy, ...config, echo_managed: false } },
     });
+  }
+  private newCardId(): string {
+    return typeof crypto?.randomUUID === "function"
+      ? `lovelace-${crypto.randomUUID()}`
+      : `lovelace-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  }
+  private async createCardHolder(): Promise<string> {
+    const current = String(this.config.card_holder_url_path || "");
+    const dashboards = await this.callWS({ type: "lovelace/dashboards/list" });
+    const existing = Array.isArray(dashboards) ? dashboards.find((item: any) => item.url_path === current || item.url_path === "echo-show-custom-card-holder") : undefined;
+    if (existing?.url_path) return String(existing.url_path);
+    const urlPath = "echo-show-custom-card-holder";
+    const created = await this.callWS({ type: "lovelace/dashboards/create", url_path: urlPath, title: "Echo Show Custom Card Holder", show_in_sidebar: false, require_admin: false });
+    await this.callWS({ type: "lovelace/config/save", url_path: String(created.url_path || urlPath), config: {
+      title: "Echo Show Custom Card Holder",
+      views: [{ title: "Cards", path: "cards", cards: [] }],
+    } });
+    return String(created.url_path || urlPath);
+  }
+  private async syncCardLibrary(holderPath: string): Promise<EchoCardLibraryEntry[]> {
+    const holder = await this.callWS({ type: "lovelace/config", url_path: holderPath });
+    const cards: HolderCard[] = [];
+    (Array.isArray(holder?.views) ? holder.views : []).forEach((view: any, viewIndex: number) => {
+      (Array.isArray(view?.cards) ? view.cards : []).forEach((config: any, position: number) => {
+        if (config && typeof config === "object") cards.push({ config, view_path: String(view.path || viewIndex), position });
+      });
+    });
+    return reconcileCardLibrary(Array.isArray(this.config.card_library) ? this.config.card_library : [], cards, holderPath, () => this.newCardId());
   }
   private async loadManagedDashboards() {
     this.managedDashboardsLoading = true;
@@ -373,6 +406,7 @@ class EchoShowEditor extends HTMLElement {
       ? Boolean(activeTarget && this._hass?.states[activeTarget.idle]?.state === "on")
       : Boolean(this.config.echo_dashboard_when_idle);
     const selectedKioskMode = kioskModeSetting(this.config.kiosk_mode, this.config.echo_managed ? "enabled" : "inherit");
+    const cardLibrary: EchoCardLibraryEntry[] = Array.isArray(this.config.card_library) ? this.config.card_library : [];
     const menuEditors = menuProfiles.map((menu, index) => {
       const isLightsMenu = /lights?/i.test(menu.label);
       const pickerOpen = EchoShowEditor.openMenuPickers[menu.id] || [];
@@ -390,11 +424,15 @@ class EchoShowEditor extends HTMLElement {
       const destinationIsListed = this.dashboardDestinations.some((item) => item.path === destination);
       const destinationSelect = `<label>Dashboard/view <select data-menu-destination><option value="">Select a dashboard or view</option>${this.dashboardDestinations.map((item) => `<option value="${escapeHtml(item.path)}" ${item.path === destination ? "selected" : ""}>${escapeHtml(item.label)}</option>`).join("")}<option value="__custom__" ${destination && !destinationIsListed ? "selected" : ""}>Custom path…</option></select></label>`;
       const customDestination = destination && !destinationIsListed ? `<label>Custom path <input type="text" data-menu-custom-destination value="${escapeHtml(destination)}" placeholder="/lovelace/0"></label>` : "";
+      const lovelaceCards = cardLibrary.filter((card) => !card.missing);
+      const selectedCard = String(menu.lovelace_card_id || "");
+      const sourcePicker = menu.action === "navigate" ? "" : `<div class="row"><label>Button source <select data-menu-source><option value="menu" ${menu.source === "lovelace_card" ? "" : "selected"}>Menu content</option><option value="lovelace_card" ${menu.source === "lovelace_card" ? "selected" : ""}>Lovelace Card</option></select></label>${menu.source === "lovelace_card" ? `<label>Lovelace Card <select data-menu-lovelace-card><option value="">Select a card</option>${lovelaceCards.map((card) => `<option value="${escapeHtml(card.id)}" ${card.id === selectedCard ? "selected" : ""}>${escapeHtml(card.name)} — ${escapeHtml(card.card_type)} (${escapeHtml(card.id)})</option>`).join("")}</select></label>` : ""}</div>${menu.source === "lovelace_card" ? `<div class="hint">This proof of concept saves a stable reference only. The card is not rendered or forwarded to the Echo yet.</div>` : ""}`;
       const menuOpen = EchoShowEditor.openMenuCards[menu.id] ?? (index === 0 || isLightsMenu);
       return `<details class="menu-config" data-menu-card="${escapeHtml(menu.id)}" ${menuOpen ? "open" : ""}>
       <summary>Menu ${index + 1}: ${escapeHtml(menu.label)}</summary>
       <div class="row"><label>Menu order <select data-menu-order>${menuProfiles.map((_, optionIndex) => `<option value="${optionIndex + 1}" ${index === optionIndex ? "selected" : ""}>${optionIndex + 1}</option>`).join("")}</select></label><label>Menu name <input type="text" data-menu-label value="${escapeHtml(menu.label)}"></label><label>Icon <input type="text" data-menu-icon value="${escapeHtml(menu.icon || "mdi:view-dashboard")}" placeholder="mdi:home"></label></div>
       <div class="row"><label>Action <select data-menu-action><option value="view" ${menu.action === "navigate" ? "" : "selected"}>Show this menu</option><option value="navigate" ${menu.action === "navigate" ? "selected" : ""}>Navigate to Dashboard</option></select></label>${menu.action === "navigate" ? `${destinationSelect}${customDestination}` : ""}</div>${menu.action === "navigate" ? `<div class="hint">Choose any available Home Assistant dashboard or view. Custom paths are limited to this Home Assistant instance and open in the current session without changing the Echo assignment.</div>${this.dashboardDestinationsLoading ? `<div class="hint">Loading dashboards and views…</div>` : ""}${this.dashboardDestinationsError ? `<div class="hint">Could not load the dashboard list: ${escapeHtml(this.dashboardDestinationsError)}</div>` : ""}` : ""}
+      ${sourcePicker}
       <div class="row">${areaSelect}</div>${this.areaRegistryError ? `<div class="hint">Area filters are unavailable: ${escapeHtml(this.areaRegistryError)}</div>` : this.areaRegistryLoading ? `<div class="hint">Loading Home Assistant areas…</div>` : `<div class="hint">Choose an area to narrow the camera, light, and temperature lists for this menu, then tick the entities you want to show.</div>`}
       ${menu.action === "navigate" ? "" : `<details class="content-picker" ${(pickerOpen[0] ?? (menu.cameras || []).length > 0) ? "open" : ""}><summary>Cameras · ${(menu.cameras || []).length} selected</summary>${menuCameras.length ? menuCameras.map((camera) => `<div class="camera-choice"><label class="camera"><input type="checkbox" data-menu-camera value="${escapeHtml(camera.entityId)}" ${(menu.cameras || []).includes(camera.entityId) ? "checked" : ""}>${escapeHtml(camera.label)}</label>${(menu.cameras || []).includes(camera.entityId) ? cameraAppearance(camera, menu.id) : ""}</div>`).join("") : `<div class="hint">No cameras are available in this area.</div>`}</details>
       <details class="content-picker" ${(pickerOpen[1] ?? isLightsMenu) ? "open" : ""}><summary>Choose lights · ${(menu.lights || []).length} selected</summary>${menuLights.length ? menuLights.map((light: any) => `<label class="camera"><input type="checkbox" data-menu-light value="${escapeHtml(light.entity_id)}" ${(menu.lights || []).includes(light.entity_id) ? "checked" : ""}>${escapeHtml(light.attributes?.friendly_name || light.entity_id)}</label>`).join("") : `<div class="hint">No lights are available in this area.</div>`}</details>
@@ -431,6 +469,7 @@ class EchoShowEditor extends HTMLElement {
         <div class="row"><button id="remove-profile" type="button" ${selectedProfileId ? "" : "disabled"}>Remove saved setup</button></div>
         <div class="hint">Use Save setup at the bottom when you want to add or update this reusable setup. It keeps this editor open.</div></div>
       <div class="section"><h3>Kiosk Mode</h3><div class="hint">This setting belongs to this Echo dashboard only. It does not change Home Assistant globally or alter any dashboard you navigate to.</div><div class="row"><label for="kiosk-mode">Kiosk Mode <select id="kiosk-mode"><option value="enabled" ${selectedKioskMode === "enabled" ? "selected" : ""}>Enabled</option><option value="disabled" ${selectedKioskMode === "disabled" ? "selected" : ""}>Disabled</option><option value="inherit" ${selectedKioskMode === "inherit" ? "selected" : ""}>Inherit</option></select></label></div><div class="hint">Enabled and Disabled explicitly configure NemesisRE Kiosk Mode. Inherit leaves this dashboard without an override, so any existing Home Assistant or user-level rule can apply.</div></div>
+      <div class="section"><h3>Custom Card Holder</h3><div class="hint">A separate, genuine Home Assistant Lovelace dashboard for native Copy Card and Paste Card. It is builder-only: it never becomes an Echo menu or is exported to an Echo dashboard.</div><div class="row"><button id="open-card-holder" type="button">Open Custom Card Holder</button><button id="sync-card-holder" type="button" ${this.config.card_holder_url_path ? "" : "disabled"}>Sync card library</button></div><div id="card-holder-status" class="hint" aria-live="polite"></div>${cardLibrary.length ? `<ul>${cardLibrary.map((card) => `<li class="camera"><span>${escapeHtml(card.name)} — ${escapeHtml(card.card_type)} — ${escapeHtml(card.id)}${card.missing ? " (missing from holder)" : ""}</span><label>Display name <input type="text" data-card-library-name="${escapeHtml(card.id)}" value="${escapeHtml(card.name)}"></label></li>`).join("")}</ul><div class="hint">Names are builder metadata; they do not change the original Lovelace card. Missing cards retain their ID so references cannot redirect.</div>` : `<div class="hint">No cards have been discovered yet. Paste cards into the holder, save them normally, then Sync card library.</div>`}</div>
       <div class="section"><h3>Menus (${menuProfiles.length})</h3><div class="hint">Each menu becomes a button on the Echo. Expand a menu, then choose cameras, lights, or temperature sensors. Each selected camera has its own size, order, overlay, and refresh setting.</div><div class="row"><label for="camera-refresh-default">Default camera image refresh</label><select id="camera-refresh-default">${[1000, 2000, 3000, 5000, 10000, 15000].map((value) => `<option value="${value}" ${cameraRefreshInterval === value ? "selected" : ""}>Every ${value / 1000} seconds</option>`).join("")}</select></div><div class="hint">Individual cameras can use this default or override it. Faster refresh requests more images from Home Assistant.</div>${menuEditors}<button id="add-menu" type="button">Add menu</button></div>
       <div class="section"><h3>Apply setup to Echo Show</h3><div class="hint">Your setups are saved in this builder and previewed here. Applying one creates its Echo dashboard; the previous dashboard made here for that Echo is removed after the new one is attached. The builder stays available for editing and preview.</div>
         <div class="row"><label for="echo-target">Echo Show</label><select id="echo-target" size="${Math.min(Math.max(targets.length + 1, 2), 5)}">${targets.length ? `<option value="">Select a device</option>${targets.map((target) => `<option value="${target.key}" ${target.key === selectedTarget ? "selected" : ""}>${target.label}</option>`).join("")}` : `<option value="">No TECHO5 devices discovered</option>`}</select></div>
@@ -478,6 +517,8 @@ class EchoShowEditor extends HTMLElement {
         destination: card.querySelector<HTMLSelectElement>("[data-menu-destination]")?.value === "__custom__"
           ? card.querySelector<HTMLInputElement>("[data-menu-custom-destination]")?.value.trim() || ""
           : card.querySelector<HTMLSelectElement>("[data-menu-destination]")?.value || "",
+        source: card.querySelector<HTMLSelectElement>("[data-menu-source]")?.value === "lovelace_card" ? "lovelace_card" : "menu",
+        lovelace_card_id: card.querySelector<HTMLSelectElement>("[data-menu-lovelace-card]")?.value || "",
       };
     });
     const rememberOpenPickers = () => {
@@ -525,7 +566,7 @@ class EchoShowEditor extends HTMLElement {
     // config-changed while typing makes Home Assistant recreate this editor and
     // returns its scroll position to the top.
     root.querySelectorAll<HTMLInputElement>("[data-menu-camera], [data-menu-light], [data-menu-temperature], [data-overlay-show]").forEach((input) => input.addEventListener("change", () => this.emitCurrentConfig()));
-    root.querySelectorAll<HTMLSelectElement>("[data-menu-order], [data-menu-action], [data-menu-destination], [data-order], [data-overlay-h], [data-overlay-v], [data-span], [data-camera-refresh], #camera-refresh-default, #kiosk-mode").forEach((input) => input.addEventListener("change", () => this.emitCurrentConfig()));
+    root.querySelectorAll<HTMLSelectElement>("[data-menu-order], [data-menu-action], [data-menu-destination], [data-menu-source], [data-menu-lovelace-card], [data-order], [data-overlay-h], [data-overlay-v], [data-span], [data-camera-refresh], #camera-refresh-default, #kiosk-mode").forEach((input) => input.addEventListener("change", () => this.emitCurrentConfig()));
     const updateMenus = (rerender = false) => {
       this.emit({ menus: readMenuProfiles() }, rerender);
       if (!rerender) {
@@ -556,8 +597,9 @@ class EchoShowEditor extends HTMLElement {
       updateMenus();
     }));
     root.querySelectorAll<HTMLSelectElement>("[data-menu-action]").forEach((select) => select.addEventListener("change", () => {
-      const card = select.closest<HTMLElement>("[data-menu-card]");
-      const action = select.value === "navigate" ? "navigate" : "view";
+      this.emit({ menus: readMenuProfiles() }, true);
+    }));
+    root.querySelectorAll<HTMLSelectElement>("[data-menu-source]").forEach((select) => select.addEventListener("change", () => {
       this.emit({ menus: readMenuProfiles() }, true);
     }));
     root.querySelectorAll<HTMLSelectElement>("[data-menu-destination]").forEach((select) => select.addEventListener("change", () => {
@@ -576,6 +618,43 @@ class EchoShowEditor extends HTMLElement {
       this.menuAreaFilters[menuId] = select.value;
       this.render();
     }));
+    root.querySelectorAll<HTMLInputElement>("[data-card-library-name]").forEach((input) => input.addEventListener("change", async () => {
+      const id = input.dataset.cardLibraryName || "";
+      const name = input.value.trim();
+      if (!id || !name) return;
+      const nextLibrary = cardLibrary.map((card) => card.id === id ? { ...card, name } : card);
+      const status = root.querySelector<HTMLElement>("#card-holder-status");
+      try {
+        await this.persistBuilderConfig({ ...this.getCurrentConfig(), card_library: nextLibrary });
+        this.config = { ...this.config, card_library: nextLibrary };
+        if (status) status.textContent = `Saved the display name for ${name}.`;
+      } catch (error) { if (status) status.textContent = `Could not save that card name: ${String(error)}`; }
+    }));
+    root.querySelector<HTMLButtonElement>("#open-card-holder")?.addEventListener("click", async () => {
+      const status = root.querySelector<HTMLElement>("#card-holder-status");
+      try {
+        if (status) status.textContent = "Opening the native Lovelace card holder…";
+        const holderPath = await this.createCardHolder();
+        const next = { ...this.getCurrentConfig(), card_holder_url_path: holderPath };
+        await this.persistBuilderConfig(next);
+        window.location.assign(`/${holderPath}/cards`);
+      } catch (error) { if (status) status.textContent = `Could not open the card holder: ${String(error)}`; }
+    });
+    root.querySelector<HTMLButtonElement>("#sync-card-holder")?.addEventListener("click", async () => {
+      const status = root.querySelector<HTMLElement>("#card-holder-status");
+      const holderPath = String(this.config.card_holder_url_path || "");
+      if (!holderPath) return;
+      try {
+        if (status) status.textContent = "Syncing cards saved in the native Lovelace holder…";
+        const card_library = await this.syncCardLibrary(holderPath);
+        const next = { ...this.getCurrentConfig(), card_library };
+        await this.persistBuilderConfig(next);
+        this.config = next;
+        this.render();
+        const nextStatus = this.shadowRoot?.querySelector<HTMLElement>("#card-holder-status");
+        if (nextStatus) nextStatus.textContent = `Synced ${card_library.filter((card) => !card.missing).length} cards.`;
+      } catch (error) { if (status) status.textContent = `Could not sync the card library: ${String(error)}`; }
+    });
     root.querySelectorAll<HTMLInputElement>("[data-menu-camera], [data-menu-light], [data-menu-temperature]").forEach((input) => input.addEventListener("change", () => {
       rememberOpenPickers();
       updateMenus();

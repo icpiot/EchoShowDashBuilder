@@ -1,4 +1,5 @@
 import { listAvailableCameras, HomeAssistantState } from "./camera-feeds";
+import type { EchoCardLibraryEntry } from "./card-library";
 
 export interface EchoDashboardConfig {
   title?: string;
@@ -18,6 +19,8 @@ export interface EchoDashboardConfig {
   refresh_interval?: number;
   camera_refresh_interval?: number;
   camera_refresh_intervals?: Record<string, number>;
+  card_holder_url_path?: string;
+  card_library?: EchoCardLibraryEntry[];
 }
 
 export interface EchoSavedDashboardProfile {
@@ -43,6 +46,8 @@ export interface EchoMenuConfig {
   temperatures?: string[];
   action?: "view" | "navigate";
   destination?: string;
+  source?: "menu" | "lovelace_card";
+  lovelace_card_id?: string;
 }
 
 export function kioskModeSetting(value: unknown, defaultValue: KioskModeSetting = "inherit"): KioskModeSetting {
