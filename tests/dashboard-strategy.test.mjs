@@ -51,3 +51,13 @@ test("renders the resolved Lovelace card unchanged for a selected menu reference
   }, hass);
   assert.deepEqual(dashboard.views[0].cards[0].cards[1], card);
 });
+
+test("renders every selected Lovelace card in a single menu", () => {
+  const first = { type: "custom:button-card", name: "Office Lamp" };
+  const second = { type: "custom:button-card", name: "Living Room" };
+  const dashboard = generateEchoDashboard({
+    menus: [{ id: "cards", label: "Cards", source: "lovelace_card", lovelace_card_ids: ["office", "living"] }],
+    lovelace_cards: { office: first, living: second },
+  }, hass);
+  assert.deepEqual(dashboard.views[0].cards[0].cards.slice(1), [first, second]);
+});

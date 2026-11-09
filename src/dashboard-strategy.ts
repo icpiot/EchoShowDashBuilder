@@ -49,6 +49,9 @@ export interface EchoMenuConfig {
   action?: "view" | "navigate";
   destination?: string;
   source?: "menu" | "lovelace_card";
+  /** Multiple native cards may share one Echo menu. */
+  lovelace_card_ids?: string[];
+  /** @deprecated Kept so existing saved menus load unchanged. */
   lovelace_card_id?: string;
 }
 
@@ -128,10 +131,14 @@ export function generateEchoDashboard(config: EchoDashboardConfig, hass: HomeAss
     if (cameras.length) content.push({ type: "custom:echo-camera-wall", cameras, compact: lights.length > 0 || temperatures.length > 0 });
     if (lights.length) content.push({ type: "custom:echo-light-controls", lights });
     if (temperatures.length) content.push({ type: "custom:echo-temperature-readings", sensors: temperatures });
-    if (menu.source === "lovelace_card" && menu.lovelace_card_id) {
-      const card = config.lovelace_cards?.[menu.lovelace_card_id];
-      if (card) content.push(card);
-      else content.push({ type: "markdown", content: "The selected Lovelace Card is no longer available in the Custom Card Holder." });
+    if (menu.source === "lovelace_card") {
+      const selectedIds = Array.isArray(menu.lovelace_card_ids) && menu.lovelace_card_ids.length
+        ? menu.lovelace_card_ids : menu.lovelace_card_id ? [menu.lovelace_card_id] : [];
+      for (const id of selectedIds) {
+        const card = config.lovelace_cards?.[id];
+        if (card) content.push(card);
+        else content.push({ type: "markdown", content: "A selected Lovelace Card is no longer available in the Custom Card Holder." });
+      }
     }
     if (!content.length) content.push({ type: "markdown", content: "Choose cameras, lights, or temperature sensors for this menu in the dashboard settings." });
     return view(menu.label, menu.id, content);

@@ -63,6 +63,7 @@ function getMenuProfiles(config: any, cameras: Array<{ entityId: string }>, ligh
       action: menu.action === "navigate" ? "navigate" : "view",
       destination: String(menu.destination || ""),
       source: menu.source === "lovelace_card" ? "lovelace_card" : "menu",
+      lovelace_card_ids: Array.isArray(menu.lovelace_card_ids) ? menu.lovelace_card_ids.map(String) : menu.lovelace_card_id ? [String(menu.lovelace_card_id)] : [],
       lovelace_card_id: String(menu.lovelace_card_id || ""),
     }));
   }
@@ -124,7 +125,7 @@ class EchoShowEditor extends HTMLElement {
           ? card.querySelector<HTMLInputElement>("[data-menu-custom-destination]")?.value.trim() || ""
           : card.querySelector<HTMLSelectElement>("[data-menu-destination]")?.value || "",
         source: card.querySelector<HTMLSelectElement>("[data-menu-source]")?.value === "lovelace_card" ? "lovelace_card" : "menu",
-        lovelace_card_id: card.querySelector<HTMLSelectElement>("[data-menu-lovelace-card]")?.value || "",
+        lovelace_card_ids: Array.from(card.querySelectorAll<HTMLInputElement>("[data-menu-lovelace-card]:checked"), (input) => input.value),
       };
     });
     const cameraOrder = Array.from(root.querySelectorAll<HTMLSelectElement>("[data-order]"))
@@ -247,7 +248,8 @@ class EchoShowEditor extends HTMLElement {
     return reconcileCardLibrary(Array.isArray(this.config.card_library) ? this.config.card_library : [], cards, holderPath, () => this.newCardId());
   }
   private async resolveLovelaceCards(config: any, menus: EchoMenuConfig[]): Promise<Record<string, Record<string, unknown>>> {
-    const selectedIds = new Set(menus.filter((menu) => menu.source === "lovelace_card" && menu.lovelace_card_id).map((menu) => String(menu.lovelace_card_id)));
+    const selectedIds = new Set(menus.flatMap((menu) => menu.source === "lovelace_card"
+      ? (Array.isArray(menu.lovelace_card_ids) && menu.lovelace_card_ids.length ? menu.lovelace_card_ids : menu.lovelace_card_id ? [menu.lovelace_card_id] : []) : []).map(String));
     if (!selectedIds.size) return {};
     const holderPath = String(config.card_holder_url_path || "");
     if (!holderPath) throw new Error("Open the Custom Card Holder and sync its card library before applying this setup.");
@@ -445,8 +447,8 @@ class EchoShowEditor extends HTMLElement {
       const destinationSelect = `<label>Dashboard/view <select data-menu-destination><option value="">Select a dashboard or view</option>${this.dashboardDestinations.map((item) => `<option value="${escapeHtml(item.path)}" ${item.path === destination ? "selected" : ""}>${escapeHtml(item.label)}</option>`).join("")}<option value="__custom__" ${destination && !destinationIsListed ? "selected" : ""}>Custom path…</option></select></label>`;
       const customDestination = destination && !destinationIsListed ? `<label>Custom path <input type="text" data-menu-custom-destination value="${escapeHtml(destination)}" placeholder="/lovelace/0"></label>` : "";
       const lovelaceCards = cardLibrary.filter((card) => !card.missing);
-      const selectedCard = String(menu.lovelace_card_id || "");
-      const sourcePicker = menu.action === "navigate" ? "" : `<div class="row"><label>Button source <select data-menu-source><option value="menu" ${menu.source === "lovelace_card" ? "" : "selected"}>Menu content</option><option value="lovelace_card" ${menu.source === "lovelace_card" ? "selected" : ""}>Lovelace Card</option></select></label>${menu.source === "lovelace_card" ? `<label>Lovelace Card <select data-menu-lovelace-card><option value="">Select a card</option>${lovelaceCards.map((card) => `<option value="${escapeHtml(card.id)}" ${card.id === selectedCard ? "selected" : ""}>${escapeHtml(card.name)} — ${escapeHtml(card.card_type)} (${escapeHtml(card.id)})</option>`).join("")}</select></label>` : ""}</div>${menu.source === "lovelace_card" ? `<div class="hint">The selected card is copied unchanged into this Echo menu when you apply the setup. Its native card actions remain available there.</div>` : ""}`;
+      const selectedCards = new Set(Array.isArray(menu.lovelace_card_ids) && menu.lovelace_card_ids.length ? menu.lovelace_card_ids : menu.lovelace_card_id ? [menu.lovelace_card_id] : []);
+      const sourcePicker = menu.action === "navigate" ? "" : `<div class="row"><label>Button source <select data-menu-source><option value="menu" ${menu.source === "lovelace_card" ? "" : "selected"}>Menu content</option><option value="lovelace_card" ${menu.source === "lovelace_card" ? "selected" : ""}>Lovelace Cards</option></select></label></div>${menu.source === "lovelace_card" ? `<div class="card-picker"><strong>Cards in this menu</strong>${lovelaceCards.map((card) => `<label class="camera"><input type="checkbox" data-menu-lovelace-card value="${escapeHtml(card.id)}" ${selectedCards.has(card.id) ? "checked" : ""}>${escapeHtml(card.name)} — ${escapeHtml(card.card_type)}</label>`).join("") || `<div class="hint">No cards are available. Open the Custom Card Holder and Sync card library.</div>`}</div><div class="hint">Tick one or more cards. They are copied unchanged into this Echo menu when you apply the setup; their native actions remain available there.</div>` : ""}`;
       const menuOpen = EchoShowEditor.openMenuCards[menu.id] ?? (index === 0 || isLightsMenu);
       return `<details class="menu-config" data-menu-card="${escapeHtml(menu.id)}" ${menuOpen ? "open" : ""}>
       <summary>Menu ${index + 1}: ${escapeHtml(menu.label)}</summary>
@@ -538,7 +540,7 @@ class EchoShowEditor extends HTMLElement {
           ? card.querySelector<HTMLInputElement>("[data-menu-custom-destination]")?.value.trim() || ""
           : card.querySelector<HTMLSelectElement>("[data-menu-destination]")?.value || "",
         source: card.querySelector<HTMLSelectElement>("[data-menu-source]")?.value === "lovelace_card" ? "lovelace_card" : "menu",
-        lovelace_card_id: card.querySelector<HTMLSelectElement>("[data-menu-lovelace-card]")?.value || "",
+        lovelace_card_ids: Array.from(card.querySelectorAll<HTMLInputElement>("[data-menu-lovelace-card]:checked"), (input) => input.value),
       };
     });
     const rememberOpenPickers = () => {
@@ -585,8 +587,8 @@ class EchoShowEditor extends HTMLElement {
     // Text fields commit on change (blur/Enter), not every keystroke.  Emitting
     // config-changed while typing makes Home Assistant recreate this editor and
     // returns its scroll position to the top.
-    root.querySelectorAll<HTMLInputElement>("[data-menu-camera], [data-menu-light], [data-menu-temperature], [data-overlay-show]").forEach((input) => input.addEventListener("change", () => this.emitCurrentConfig()));
-    root.querySelectorAll<HTMLSelectElement>("[data-menu-order], [data-menu-action], [data-menu-destination], [data-menu-source], [data-menu-lovelace-card], [data-order], [data-overlay-h], [data-overlay-v], [data-span], [data-camera-refresh], #camera-refresh-default, #kiosk-mode").forEach((input) => input.addEventListener("change", () => this.emitCurrentConfig()));
+    root.querySelectorAll<HTMLInputElement>("[data-menu-camera], [data-menu-light], [data-menu-temperature], [data-menu-lovelace-card], [data-overlay-show]").forEach((input) => input.addEventListener("change", () => this.emitCurrentConfig()));
+    root.querySelectorAll<HTMLSelectElement>("[data-menu-order], [data-menu-action], [data-menu-destination], [data-menu-source], [data-order], [data-overlay-h], [data-overlay-v], [data-span], [data-camera-refresh], #camera-refresh-default, #kiosk-mode").forEach((input) => input.addEventListener("change", () => this.emitCurrentConfig()));
     const updateMenus = (rerender = false) => {
       this.emit({ menus: readMenuProfiles() }, rerender);
       if (!rerender) {
