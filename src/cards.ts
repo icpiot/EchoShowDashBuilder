@@ -60,7 +60,7 @@ class EchoCameraWall extends HTMLElement {
       const horizontal = overlay.horizontal === 'center' ? 'center' : overlay.horizontal === 'right' ? 'right' : 'left';
       const vertical = overlay.vertical === 'top' ? 'top' : 'bottom';
       tile.innerHTML = `<img alt="${camera.label || camera.entity}"><span class="label ${vertical} ${horizontal}" ${overlay.show === false ? 'hidden' : ''}>${camera.label || camera.entity}</span>`;
-      tile.addEventListener('click', () => this.openFeed(camera.entity));
+      tile.addEventListener('click', () => this.openFeed(String(camera.detail_path || '')));
       wall.appendChild(tile);
     }
     if (!this.cameras().length) wall.innerHTML='<div class="empty">No cameras are configured.</div>';
@@ -68,15 +68,14 @@ class EchoCameraWall extends HTMLElement {
     if (this.timer) window.clearInterval(this.timer);
     this.timer = window.setInterval(() => this.refresh(), 1000);
   }
-  private openFeed(entity: string) {
-    const picture = this._hass?.states[entity]?.attributes?.entity_picture;
-    if (!picture) return;
-    const feed = new URL(String(picture), window.location.origin);
-    // The snapshot proxy is ideal for tiles but not for a selected live view.
-    // Home Assistant's stream proxy retains its signed query token and avoids
-    // the unsupported Echo more-info media dialog.
-    feed.pathname = feed.pathname.replace('/api/camera_proxy/', '/api/camera_proxy_stream/');
-    window.location.assign(feed.toString());
+  private openFeed(path: string) {
+    if (!path) return;
+    const segments = window.location.pathname.split('/').filter(Boolean);
+    const dashboardBase = segments.length > 1 ? `/${segments.slice(0, -1).join('/')}` : window.location.pathname.replace(/\/$/, '');
+    const navigationPath = `${dashboardBase}/${encodeURIComponent(path)}`;
+    this.dispatchEvent(new CustomEvent('hass-navigate', {bubbles:true, composed:true, detail:{navigation_path:navigationPath}}));
+    window.history.pushState(null, '', navigationPath);
+    window.dispatchEvent(new CustomEvent('location-changed', { detail: { replace: false } }));
   }
   private updateLayout() {
     const wall = this.shadowRoot?.querySelector('.wall') as HTMLElement | null;

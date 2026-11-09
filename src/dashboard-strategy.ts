@@ -73,6 +73,7 @@ export function localDashboardPath(value: unknown): string | undefined {
 }
 
 export function generateEchoDashboard(config: EchoDashboardConfig, hass: HomeAssistantState) {
+  const cameraPath = (entity: string) => `camera-${entity.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '')}`;
   const available = listAvailableCameras(hass);
   const configuredOrder = Array.isArray(config.camera_order) ? config.camera_order : [];
   const cameraOrder = [...configuredOrder.filter((entity) => available.some((camera) => camera.entityId === entity)), ...available.filter((camera) => !configuredOrder.includes(camera.entityId)).map((camera) => camera.entityId)];
@@ -124,7 +125,7 @@ export function generateEchoDashboard(config: EchoDashboardConfig, hass: HomeAss
   const views = menus.filter((menu) => menu.action !== "navigate").map((menu) => {
     const cameras = ordered
       .filter((camera) => (menu.cameras || []).includes(camera.entityId))
-      .map((camera) => ({ entity: camera.entityId, label: camera.label, name_overlay: config.camera_overlays?.[camera.entityId], span: config.camera_spans?.[camera.entityId], refresh_interval: config.camera_refresh_intervals?.[camera.entityId] || config.camera_refresh_interval || config.refresh_interval || 3000 }));
+      .map((camera) => ({ entity: camera.entityId, label: camera.label, detail_path: cameraPath(camera.entityId), name_overlay: config.camera_overlays?.[camera.entityId], span: config.camera_spans?.[camera.entityId], refresh_interval: config.camera_refresh_intervals?.[camera.entityId] || config.camera_refresh_interval || config.refresh_interval || 3000 }));
     const lights = availableLights.filter((light) => (menu.lights || []).includes(light.entity));
     const temperatures = availableTemperatures.filter((sensor) => (menu.temperatures || []).includes(sensor.entity));
     const content: Record<string, unknown>[] = [];
@@ -149,7 +150,8 @@ export function generateEchoDashboard(config: EchoDashboardConfig, hass: HomeAss
     if (!content.length) content.push({ type: "markdown", content: "Choose cameras, lights, or temperature sensors for this menu in the dashboard settings." });
     return view(menu.label, menu.id, content);
   });
-  const dashboard: Record<string, any> = { title: config.title || "Echo Show", views };
+  const detailViews = ordered.filter((camera) => menus.some((menu) => (menu.cameras || []).includes(camera.entityId))).map((camera) => view(camera.label, cameraPath(camera.entityId), [menuCard(cameraPath(camera.entityId)), { type: "custom:webrtc-camera", entity: camera.entityId }]));
+  const dashboard: Record<string, any> = { title: config.title || "Echo Show", views: [...views, ...detailViews] };
   const kioskMode = kioskModeSetting(config.kiosk_mode, config.echo_managed ? "enabled" : "inherit");
   // NemesisRE Kiosk Mode reads this dashboard-level object.  Leaving it absent
   // is intentionally distinct from an explicit { kiosk: false } override.
