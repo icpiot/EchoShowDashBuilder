@@ -60,7 +60,7 @@ class EchoCameraWall extends HTMLElement {
       const horizontal = overlay.horizontal === 'center' ? 'center' : overlay.horizontal === 'right' ? 'right' : 'left';
       const vertical = overlay.vertical === 'top' ? 'top' : 'bottom';
       tile.innerHTML = `<img alt="${camera.label || camera.entity}"><span class="label ${vertical} ${horizontal}" ${overlay.show === false ? 'hidden' : ''}>${camera.label || camera.entity}</span>`;
-      tile.addEventListener('click', () => this.openFeed(camera.entity));
+      tile.addEventListener('click', () => this.dispatchEvent(new CustomEvent('hass-more-info', { bubbles: true, composed: true, detail: { entityId: camera.entity } })));
       wall.appendChild(tile);
     }
     if (!this.cameras().length) wall.innerHTML='<div class="empty">No cameras are configured.</div>';
@@ -70,13 +70,6 @@ class EchoCameraWall extends HTMLElement {
     // requested.  Poll more often so the optional 100/250/500 ms settings can be
     // honoured without requesting every image at that rate.
     this.timer = window.setInterval(() => this.refresh(), 100);
-  }
-  private openFeed(entity: string) {
-    const picture = this._hass?.states[entity]?.attributes?.entity_picture;
-    if (!picture) return;
-    const feed = new URL(String(picture), window.location.origin);
-    feed.pathname = feed.pathname.replace('/api/camera_proxy/', '/api/camera_proxy_stream/');
-    window.location.assign(feed.toString());
   }
   private updateLayout() {
     const wall = this.shadowRoot?.querySelector('.wall') as HTMLElement | null;
