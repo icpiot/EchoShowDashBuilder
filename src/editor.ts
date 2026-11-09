@@ -1,6 +1,6 @@
 import { listAvailableCameras } from "./camera-feeds";
 import { kioskModeSetting, localDashboardPath, type EchoMenuConfig, type EchoSavedDashboardProfile } from "./dashboard-strategy";
-import { reconcileCardLibrary, type EchoCardLibraryEntry, type HolderCard } from "./card-library";
+import { cardFingerprint, reconcileCardLibrary, type EchoCardLibraryEntry, type HolderCard } from "./card-library";
 
 type Hass = {
   states: Record<string, any>;
@@ -246,6 +246,26 @@ class EchoShowEditor extends HTMLElement {
     });
     return reconcileCardLibrary(Array.isArray(this.config.card_library) ? this.config.card_library : [], cards, holderPath, () => this.newCardId());
   }
+  private async resolveLovelaceCards(config: any, menus: EchoMenuConfig[]): Promise<Record<string, Record<string, unknown>>> {
+    const selectedIds = new Set(menus.filter((menu) => menu.source === "lovelace_card" && menu.lovelace_card_id).map((menu) => String(menu.lovelace_card_id)));
+    if (!selectedIds.size) return {};
+    const holderPath = String(config.card_holder_url_path || "");
+    if (!holderPath) throw new Error("Open the Custom Card Holder and sync its card library before applying this setup.");
+    const holder = await this.callWS({ type: "lovelace/config", url_path: holderPath });
+    const cards: Record<string, unknown>[] = [];
+    (Array.isArray(holder?.views) ? holder.views : []).forEach((view: any) => (Array.isArray(view?.cards) ? view.cards : []).forEach((card: any) => {
+      if (card && typeof card === "object") cards.push(card);
+    }));
+    const library: EchoCardLibraryEntry[] = Array.isArray(config.card_library) ? config.card_library : [];
+    const resolved: Record<string, Record<string, unknown>> = {};
+    for (const id of selectedIds) {
+      const entry = library.find((item) => item.id === id);
+      const card = entry && cards.find((item) => cardFingerprint(item) === entry.fingerprint);
+      if (!entry || entry.missing || !card) throw new Error(`The selected Lovelace Card (${entry?.name || id}) is missing from the Custom Card Holder.`);
+      resolved[id] = card;
+    }
+    return resolved;
+  }
   private async loadManagedDashboards() {
     this.managedDashboardsLoading = true;
     try {
@@ -426,7 +446,7 @@ class EchoShowEditor extends HTMLElement {
       const customDestination = destination && !destinationIsListed ? `<label>Custom path <input type="text" data-menu-custom-destination value="${escapeHtml(destination)}" placeholder="/lovelace/0"></label>` : "";
       const lovelaceCards = cardLibrary.filter((card) => !card.missing);
       const selectedCard = String(menu.lovelace_card_id || "");
-      const sourcePicker = menu.action === "navigate" ? "" : `<div class="row"><label>Button source <select data-menu-source><option value="menu" ${menu.source === "lovelace_card" ? "" : "selected"}>Menu content</option><option value="lovelace_card" ${menu.source === "lovelace_card" ? "selected" : ""}>Lovelace Card</option></select></label>${menu.source === "lovelace_card" ? `<label>Lovelace Card <select data-menu-lovelace-card><option value="">Select a card</option>${lovelaceCards.map((card) => `<option value="${escapeHtml(card.id)}" ${card.id === selectedCard ? "selected" : ""}>${escapeHtml(card.name)} — ${escapeHtml(card.card_type)} (${escapeHtml(card.id)})</option>`).join("")}</select></label>` : ""}</div>${menu.source === "lovelace_card" ? `<div class="hint">This proof of concept saves a stable reference only. The card is not rendered or forwarded to the Echo yet.</div>` : ""}`;
+      const sourcePicker = menu.action === "navigate" ? "" : `<div class="row"><label>Button source <select data-menu-source><option value="menu" ${menu.source === "lovelace_card" ? "" : "selected"}>Menu content</option><option value="lovelace_card" ${menu.source === "lovelace_card" ? "selected" : ""}>Lovelace Card</option></select></label>${menu.source === "lovelace_card" ? `<label>Lovelace Card <select data-menu-lovelace-card><option value="">Select a card</option>${lovelaceCards.map((card) => `<option value="${escapeHtml(card.id)}" ${card.id === selectedCard ? "selected" : ""}>${escapeHtml(card.name)} — ${escapeHtml(card.card_type)} (${escapeHtml(card.id)})</option>`).join("")}</select></label>` : ""}</div>${menu.source === "lovelace_card" ? `<div class="hint">The selected card is copied unchanged into this Echo menu when you apply the setup. Its native card actions remain available there.</div>` : ""}`;
       const menuOpen = EchoShowEditor.openMenuCards[menu.id] ?? (index === 0 || isLightsMenu);
       return `<details class="menu-config" data-menu-card="${escapeHtml(menu.id)}" ${menuOpen ? "open" : ""}>
       <summary>Menu ${index + 1}: ${escapeHtml(menu.label)}</summary>
@@ -754,6 +774,7 @@ class EchoShowEditor extends HTMLElement {
       button.disabled = true;
       if (status) status.textContent = "Applying this setup…";
       let created: any;
+      let reusedExisting = false;
       let attached = false;
       let priorManagedDashboards: Array<{ id: string; title: string; url_path: string; target: string }> = [];
       try {
@@ -764,6 +785,7 @@ class EchoShowEditor extends HTMLElement {
         const configuredMenus = getMenuProfiles(currentConfig, cameras, lights, temperatures);
         const invalidNavigation = configuredMenus.find((menu) => menu.action === "navigate" && !localDashboardPath(menu.destination));
         if (invalidNavigation) throw new Error(`Menu “${invalidNavigation.label}” needs a valid Home Assistant destination path, such as /lovelace/0.`);
+        const lovelaceCards = await this.resolveLovelaceCards(currentConfig, configuredMenus);
         if (!this.config.echo_managed) {
           await this.persistBuilderConfig(currentConfig);
           this.config = { ...currentConfig, echo_managed: false };
@@ -786,8 +808,18 @@ class EchoShowEditor extends HTMLElement {
         let urlPath = slug;
         let suffix = 2;
         while (usedPaths.has(urlPath)) urlPath = `${slug}-${suffix++}`;
-        const title = suffix === 2 ? baseTitle : `${baseTitle} ${suffix - 1}`;
-        created = await this.callWS({ type: "lovelace/dashboards/create", url_path: urlPath, title, show_in_sidebar: true, require_admin: false });
+        let title = suffix === 2 ? baseTitle : `${baseTitle} ${suffix - 1}`;
+        // A device has one managed dashboard. Updating it in place keeps its
+        // registered title valid for TECHO5 and avoids creating history.
+        const currentManaged = priorManagedDashboards[0];
+        if (currentManaged) {
+          reusedExisting = true;
+          urlPath = currentManaged.url_path;
+          title = currentManaged.title;
+          created = { id: currentManaged.id, url_path: urlPath, title };
+        } else {
+          created = await this.callWS({ type: "lovelace/dashboards/create", url_path: urlPath, title, show_in_sidebar: true, require_admin: false });
+        }
         const menus = configuredMenus;
         const strategyConfig = {
           type: "custom:echo-show",
@@ -797,6 +829,7 @@ class EchoShowEditor extends HTMLElement {
           included_cameras: currentConfig.included_cameras,
           included_lights: currentConfig.included_lights,
           menu: currentConfig.menu,
+          lovelace_cards: lovelaceCards,
           kiosk_mode: kioskModeSetting(currentConfig.kiosk_mode, "enabled"),
           camera_overlays: currentConfig.camera_overlays,
           camera_spans: currentConfig.camera_spans,
@@ -824,7 +857,7 @@ class EchoShowEditor extends HTMLElement {
           const options = dashboardState?.attributes?.options;
           return Array.isArray(options) ? options.map((option: unknown) => String(option)) : [];
         };
-        let dashboardAvailable = false;
+        let dashboardAvailable = reusedExisting;
         for (let attempt = 0; attempt < 20; attempt += 1) {
           if ((await availableDashboardTitles()).includes(title)) {
             dashboardAvailable = true;
@@ -835,7 +868,13 @@ class EchoShowEditor extends HTMLElement {
         if (!dashboardAvailable) {
           throw new Error(`Home Assistant did not make “${title}” available to ${target.label}.`);
         }
-        await this._hass.callService("select", "select_option", { entity_id: target.dashboardToShow, option: title });
+        const currentDashboardTitles = await this.callWS({ type: "get_states" });
+        const currentDashboardState = Array.isArray(currentDashboardTitles)
+          ? currentDashboardTitles.find((state: any) => state?.entity_id === target.dashboardToShow)
+          : undefined;
+        if (currentDashboardState?.state !== title) {
+          await this._hass.callService("select", "select_option", { entity_id: target.dashboardToShow, option: title });
+        }
         let dashboardSelected = false;
         for (let attempt = 0; attempt < 10; attempt += 1) {
           const states = await this.callWS({ type: "get_states" });
@@ -879,7 +918,7 @@ class EchoShowEditor extends HTMLElement {
               : `Applied the setup to ${target.label}. Your saved setups and builder preview remain.`;
         }
       } catch (error) {
-        if (created?.id && !attached) {
+        if (created?.id && !attached && !reusedExisting) {
           try {
             await this.callWS({ type: "lovelace/dashboards/delete", dashboard_id: created.id });
             if (status) status.textContent = `Could not apply the dashboard to ${target.label}; the unattached dashboard was removed. ${String(error)}`;

@@ -21,6 +21,8 @@ export interface EchoDashboardConfig {
   camera_refresh_intervals?: Record<string, number>;
   card_holder_url_path?: string;
   card_library?: EchoCardLibraryEntry[];
+  /** Resolved card configurations captured from the builder-only holder at apply time. */
+  lovelace_cards?: Record<string, Record<string, unknown>>;
 }
 
 export interface EchoSavedDashboardProfile {
@@ -126,6 +128,11 @@ export function generateEchoDashboard(config: EchoDashboardConfig, hass: HomeAss
     if (cameras.length) content.push({ type: "custom:echo-camera-wall", cameras, compact: lights.length > 0 || temperatures.length > 0 });
     if (lights.length) content.push({ type: "custom:echo-light-controls", lights });
     if (temperatures.length) content.push({ type: "custom:echo-temperature-readings", sensors: temperatures });
+    if (menu.source === "lovelace_card" && menu.lovelace_card_id) {
+      const card = config.lovelace_cards?.[menu.lovelace_card_id];
+      if (card) content.push(card);
+      else content.push({ type: "markdown", content: "The selected Lovelace Card is no longer available in the Custom Card Holder." });
+    }
     if (!content.length) content.push({ type: "markdown", content: "Choose cameras, lights, or temperature sensors for this menu in the dashboard settings." });
     return view(menu.label, menu.id, content);
   });

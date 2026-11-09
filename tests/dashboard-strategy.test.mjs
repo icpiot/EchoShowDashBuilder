@@ -42,3 +42,12 @@ test("writes distinct explicit kiosk overrides and preserves legacy booleans", (
   assert.deepEqual(generateEchoDashboard({ kiosk_mode: "disabled" }, hass).kiosk_mode, { kiosk: false });
   assert.equal("kiosk_mode" in generateEchoDashboard({ kiosk_mode: "inherit" }, hass), false);
 });
+
+test("renders the resolved Lovelace card unchanged for a selected menu reference", () => {
+  const card = { type: "custom:button-card", name: "Office Lamp", entity: "light.office_lamp", tap_action: { action: "toggle" } };
+  const dashboard = generateEchoDashboard({
+    menus: [{ id: "cards", label: "Cards", source: "lovelace_card", lovelace_card_id: "office-lamp" }],
+    lovelace_cards: { "office-lamp": card },
+  }, hass);
+  assert.deepEqual(dashboard.views[0].cards[0].cards[1], card);
+});
