@@ -1,6 +1,6 @@
 type Hass = { states: Record<string, any>; hassUrl?: string; callWS?: (msg: any) => Promise<any>; callService?: (domain: string, service: string, data: Record<string, unknown>) => Promise<unknown> };
 
-const styles = `:host{display:block;color:var(--primary-text-color,#fff);font-family:var(--paper-font-body1_-_font-family,Arial,sans-serif)}*{box-sizing:border-box}.menu{display:flex;gap:6px;overflow:hidden;max-width:490px;margin:0 auto 8px}.menu button{flex:1;min-width:0;border:0;border-radius:10px;padding:10px 8px;background:var(--ha-card-background,#20252b);color:#f5f7fa;font:inherit;font-size:clamp(12px,2vw,18px);white-space:nowrap;cursor:pointer}.menu button.active{background:var(--primary-color,#03a9f4);color:#fff}.wall{display:grid;grid-template-columns:repeat(var(--cols,2),minmax(0,1fr));gap:var(--gap,6px)}.wall.compact .tile{max-width:var(--tile-max-width);margin-inline:auto}.tile{min-width:0;width:100%;position:relative;background:#090b0d;border-radius:8px;overflow:hidden;display:flex;align-items:center;justify-content:center;aspect-ratio:16/9;height:var(--tile-height,auto)}.tile img{display:block;width:100%;height:100%;object-fit:contain}.label{position:absolute;left:0;right:0;color:#fff;padding:5px 8px;background:linear-gradient(transparent,rgba(0,0,0,.8));font-size:clamp(11px,1.6vw,15px);text-shadow:0 1px 2px #000}.label.top{top:0;bottom:auto;background:linear-gradient(rgba(0,0,0,.8),transparent)}.label.bottom{bottom:0}.label.left{text-align:left}.label.center{text-align:center}.label.right{text-align:right}.label[hidden]{display:none}.empty{padding:16px;text-align:center;opacity:.7}`;
+const styles = `:host{display:block;color:var(--primary-text-color,#fff);font-family:var(--paper-font-body1_-_font-family,Arial,sans-serif)}*{box-sizing:border-box}.menu{display:flex;gap:6px;overflow:hidden;max-width:490px;margin:0 auto 8px}.menu button{flex:1;min-width:0;border:0;border-radius:10px;padding:10px 8px;background:var(--ha-card-background,#20252b);color:#f5f7fa;font:inherit;font-size:clamp(12px,2vw,18px);white-space:nowrap;cursor:pointer}.menu button.active{background:var(--primary-color,#03a9f4);color:#fff}.wall{display:grid;grid-template-columns:repeat(var(--cols,2),minmax(0,1fr));gap:var(--gap,6px)}.wall.compact .tile{max-width:var(--tile-max-width);margin-inline:auto}.tile{min-width:0;width:100%;position:relative;background:#090b0d;border-radius:8px;overflow:hidden;display:flex;align-items:center;justify-content:center;aspect-ratio:16/9;height:var(--tile-height,auto);cursor:pointer}.tile img{display:block;width:100%;height:100%;object-fit:contain}.label{position:absolute;left:0;right:0;color:#fff;padding:5px 8px;background:linear-gradient(transparent,rgba(0,0,0,.8));font-size:clamp(11px,1.6vw,15px);text-shadow:0 1px 2px #000}.label.top{top:0;bottom:auto;background:linear-gradient(rgba(0,0,0,.8),transparent)}.label.bottom{bottom:0}.label.left{text-align:left}.label.center{text-align:center}.label.right{text-align:right}.label[hidden]{display:none}.empty{padding:16px;text-align:center;opacity:.7}`;
 
 const escapeAttribute = (value: unknown) => String(value ?? "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
 const localPath = (value: unknown): string | undefined => {
@@ -60,15 +60,23 @@ class EchoCameraWall extends HTMLElement {
       const horizontal = overlay.horizontal === 'center' ? 'center' : overlay.horizontal === 'right' ? 'right' : 'left';
       const vertical = overlay.vertical === 'top' ? 'top' : 'bottom';
       tile.innerHTML = `<img alt="${camera.label || camera.entity}"><span class="label ${vertical} ${horizontal}" ${overlay.show === false ? 'hidden' : ''}>${camera.label || camera.entity}</span>`;
-      // Keep the streamed camera wall in place. Home Assistant's more-info
-      // player is unsupported on the Echo and replaces the preview with an
-      // "Unable to play media" dialog.
+      tile.addEventListener('click', () => this.openFeed(camera.entity));
       wall.appendChild(tile);
     }
     if (!this.cameras().length) wall.innerHTML='<div class="empty">No cameras are configured.</div>';
     this.updateLayout(); this.refresh();
     if (this.timer) window.clearInterval(this.timer);
     this.timer = window.setInterval(() => this.refresh(), 1000);
+  }
+  private openFeed(entity: string) {
+    const picture = this._hass?.states[entity]?.attributes?.entity_picture;
+    if (!picture) return;
+    const feed = new URL(String(picture), window.location.origin);
+    // The snapshot proxy is ideal for tiles but not for a selected live view.
+    // Home Assistant's stream proxy retains its signed query token and avoids
+    // the unsupported Echo more-info media dialog.
+    feed.pathname = feed.pathname.replace('/api/camera_proxy/', '/api/camera_proxy_stream/');
+    window.location.assign(feed.toString());
   }
   private updateLayout() {
     const wall = this.shadowRoot?.querySelector('.wall') as HTMLElement | null;

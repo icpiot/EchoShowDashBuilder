@@ -134,11 +134,17 @@ export function generateEchoDashboard(config: EchoDashboardConfig, hass: HomeAss
     if (menu.source === "lovelace_card") {
       const selectedIds = Array.isArray(menu.lovelace_card_ids) && menu.lovelace_card_ids.length
         ? menu.lovelace_card_ids : menu.lovelace_card_id ? [menu.lovelace_card_id] : [];
+      const cards: Record<string, unknown>[] = [];
       for (const id of selectedIds) {
         const card = config.lovelace_cards?.[id];
-        if (card) content.push(card);
+        if (card) cards.push(card);
         else content.push({ type: "markdown", content: "A selected Lovelace Card is no longer available in the Custom Card Holder." });
       }
+      // Native cards otherwise stack one-per-row inside the panel view, which
+      // creates wasted screen space for groups. Keep their own configuration
+      // unchanged but pack multiple selections into a compact Echo grid.
+      if (cards.length === 1) content.push(cards[0]);
+      if (cards.length > 1) content.push({ type: "grid", columns: 2, square: false, cards });
     }
     if (!content.length) content.push({ type: "markdown", content: "Choose cameras, lights, or temperature sensors for this menu in the dashboard settings." });
     return view(menu.label, menu.id, content);
