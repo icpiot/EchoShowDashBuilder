@@ -66,7 +66,10 @@ class EchoCameraWall extends HTMLElement {
     if (!this.cameras().length) wall.innerHTML='<div class="empty">No cameras are configured.</div>';
     this.updateLayout(); this.refresh();
     if (this.timer) window.clearInterval(this.timer);
-    this.timer = window.setInterval(() => this.refresh(), 1000);
+    // The per-camera interval below determines whether a particular image is
+    // requested.  Poll more often so the optional 100/250/500 ms settings can be
+    // honoured without requesting every image at that rate.
+    this.timer = window.setInterval(() => this.refresh(), 100);
   }
   private updateLayout() {
     const wall = this.shadowRoot?.querySelector('.wall') as HTMLElement | null;
@@ -109,7 +112,7 @@ class EchoCameraWall extends HTMLElement {
       const img = tile.querySelector('img');
       if (!img || img.dataset.loading === '1') continue;
       const camera = this.cameras().find((item: any) => item.entity === entity);
-      const refreshInterval = Math.max(1000, Number(camera?.refresh_interval || this.config.refresh_interval || 5000));
+      const refreshInterval = Math.max(100, Number(camera?.refresh_interval || this.config.refresh_interval || 5000));
       const now = Date.now();
       if (now - (this.lastRefreshByEntity.get(entity) || 0) < refreshInterval) continue;
       this.lastRefreshByEntity.set(entity, now);
