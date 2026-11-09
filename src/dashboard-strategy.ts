@@ -19,6 +19,8 @@ export interface EchoDashboardConfig {
   refresh_interval?: number;
   camera_refresh_interval?: number;
   camera_refresh_intervals?: Record<string, number>;
+  /** Target Echo key, used to route camera taps to its native RTSP viewer. */
+  echo_target?: string;
   card_holder_url_path?: string;
   card_library?: EchoCardLibraryEntry[];
   /** Resolved card configurations captured from the builder-only holder at apply time. */
@@ -124,7 +126,7 @@ export function generateEchoDashboard(config: EchoDashboardConfig, hass: HomeAss
   const views = menus.filter((menu) => menu.action !== "navigate").map((menu) => {
     const cameras = ordered
       .filter((camera) => (menu.cameras || []).includes(camera.entityId))
-      .map((camera) => ({ entity: camera.entityId, label: camera.label, name_overlay: config.camera_overlays?.[camera.entityId], span: config.camera_spans?.[camera.entityId], refresh_interval: config.camera_refresh_intervals?.[camera.entityId] || config.camera_refresh_interval || config.refresh_interval || 3000 }));
+      .map((camera) => ({ entity: camera.entityId, label: camera.label, native_camera_service: config.echo_target ? `${config.echo_target}_home_show_camera` : undefined, name_overlay: config.camera_overlays?.[camera.entityId], span: config.camera_spans?.[camera.entityId], refresh_interval: config.camera_refresh_intervals?.[camera.entityId] || config.camera_refresh_interval || config.refresh_interval || 3000 }));
     const lights = availableLights.filter((light) => (menu.lights || []).includes(light.entity));
     const temperatures = availableTemperatures.filter((sensor) => (menu.temperatures || []).includes(sensor.entity));
     const content: Record<string, unknown>[] = [];

@@ -31,7 +31,16 @@ test("keeps navigate menu items but does not make a local view for them", () => 
   }, hass);
   assert.deepEqual(dashboard.views.map((view) => view.path), ["cameras"]);
   assert.equal(dashboard.views[0].cards[0].cards[0].items[1].destination, "/lovelace/0");
+  assert.equal(dashboard.views[0].cards[0].cards[1].cameras[0].native_camera_service, undefined);
   assert.equal("kiosk_mode" in dashboard, false);
+});
+
+test("routes selected camera taps to the target Echo native RTSP viewer", () => {
+  const dashboard = generateEchoDashboard({
+    echo_target: "al_office_echo_8",
+    menus: [{ id: "cameras", label: "Cameras", cameras: ["camera.front"] }],
+  }, hass);
+  assert.equal(dashboard.views[0].cards[0].cards[1].cameras[0].native_camera_service, "al_office_echo_8_home_show_camera");
 });
 
 test("writes distinct explicit kiosk overrides and preserves legacy booleans", () => {

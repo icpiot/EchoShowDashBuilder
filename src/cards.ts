@@ -60,7 +60,7 @@ class EchoCameraWall extends HTMLElement {
       const horizontal = overlay.horizontal === 'center' ? 'center' : overlay.horizontal === 'right' ? 'right' : 'left';
       const vertical = overlay.vertical === 'top' ? 'top' : 'bottom';
       tile.innerHTML = `<img alt="${camera.label || camera.entity}"><span class="label ${vertical} ${horizontal}" ${overlay.show === false ? 'hidden' : ''}>${camera.label || camera.entity}</span>`;
-      tile.addEventListener('click', () => this.dispatchEvent(new CustomEvent('hass-more-info', { bubbles: true, composed: true, detail: { entityId: camera.entity } })));
+      tile.addEventListener('click', () => this.openNativeFeed(camera));
       wall.appendChild(tile);
     }
     if (!this.cameras().length) wall.innerHTML='<div class="empty">No cameras are configured.</div>';
@@ -70,6 +70,11 @@ class EchoCameraWall extends HTMLElement {
     // requested.  Poll more often so the optional 100/250/500 ms settings can be
     // honoured without requesting every image at that rate.
     this.timer = window.setInterval(() => this.refresh(), 100);
+  }
+  private openNativeFeed(camera: any) {
+    const service = String(camera?.native_camera_service || '');
+    if (!service || !camera?.entity) return;
+    void this._hass?.callService?.('esphome', service, { entity: camera.entity, seconds: 30 });
   }
   private updateLayout() {
     const wall = this.shadowRoot?.querySelector('.wall') as HTMLElement | null;
