@@ -1,5 +1,5 @@
 import { listAvailableCameras } from "./camera-feeds";
-import { kioskModeSetting, localDashboardPath, type EchoMenuConfig, type EchoSavedDashboardProfile } from "./dashboard-strategy";
+import { kioskModeSetting, localDashboardPath, type EchoDashboardConfig, type EchoMenuConfig, type EchoMenuToggleConfig, type EchoMenuStatusConfig, type EchoSavedDashboardProfile } from "./dashboard-strategy";
 import { cardFingerprint, reconcileCardLibrary, type EchoCardLibraryEntry, type HolderCard } from "./card-library";
 
 type Hass = {
@@ -18,6 +18,26 @@ type EchoTarget = {
 };
 
 type DashboardDestination = { path: string; label: string };
+
+const MENU_ICON_CHOICES: Array<[string, string]> = [
+  ["", "No icon"],
+  ["mdi:view-dashboard", "Dashboard"],
+  ["mdi:home", "Home"],
+  ["mdi:cctv", "Cameras"],
+  ["mdi:camera", "Camera"],
+  ["mdi:lightbulb", "Lights"],
+  ["mdi:thermometer", "Temperature"],
+  ["mdi:sofa", "Living room"],
+  ["mdi:food-fork-drink", "Kitchen"],
+  ["mdi:bed", "Bedroom"],
+  ["mdi:garage", "Garage"],
+  ["mdi:door", "Door"],
+  ["mdi:floor-plan", "Rooms"],
+  ["mdi:shield-home", "Security"],
+  ["mdi:television", "Media"],
+  ["mdi:weather-sunny", "Weather"],
+  ["mdi:dots-grid", "More"],
+];
 
 function moveCameraToPosition(order: string[], entity: string, requestedPosition: number): string[] {
   const next = [...order];
@@ -47,16 +67,118 @@ function moveMenuToPosition(menus: EchoMenuConfig[], menuId: string, requestedPo
   return next;
 }
 
+function moveCardToPosition(ids: string[], cardId: string, requestedPosition: number): string[] {
+  const next = [...ids];
+  const from = next.indexOf(cardId);
+  if (from < 0 || !Number.isFinite(requestedPosition)) return next;
+  const to = Math.max(0, Math.min(next.length - 1, Math.trunc(requestedPosition)));
+  if (from === to) return next;
+  const [card] = next.splice(from, 1);
+  next.splice(to, 0, card);
+  return next;
+}
+
+function moveToggleToPosition(toggles: EchoMenuToggleConfig[], toggleId: string, placement: "left" | "right", requestedPosition: number): EchoMenuToggleConfig[] {
+  const group = toggles.filter((toggle) => (toggle.placement === "right" ? "right" : "left") === placement).sort((a, b) => Number(a.order || 0) - Number(b.order || 0));
+  const from = group.findIndex((toggle) => toggle.id === toggleId);
+  if (from < 0 || !Number.isFinite(requestedPosition)) return toggles;
+  const to = Math.max(0, Math.min(group.length - 1, Math.trunc(requestedPosition)));
+  const [moved] = group.splice(from, 1);
+  group.splice(to, 0, moved);
+  const orders = new Map(group.map((toggle, index) => [toggle.id, index + 1]));
+  return toggles.map((toggle) => (toggle.placement === "right" ? "right" : "left") === placement ? { ...toggle, placement, order: orders.get(toggle.id) || 1 } : toggle);
+}
+
+function normaliseMenuToggles(value: unknown): EchoMenuToggleConfig[] {
+  const toggles = Array.isArray(value) ? value : [];
+  const groups: Record<string, number> = { left: 0, right: 0 };
+  return toggles.map((toggle: any, index) => {
+    const placement = toggle?.placement === "right" ? "right" : "left";
+    groups[placement] += 1;
+    return {
+      id: String(toggle?.id || `toggle-${index + 1}`), label: String(toggle?.label || `Toggle ${index + 1}`),
+      on_label: String(toggle?.on_label || ""), off_label: String(toggle?.off_label || ""), icon: String(toggle?.icon || ""), icon_entity: String(toggle?.icon_entity || ""),
+      icon_placement: toggle?.icon_placement === "center" || toggle?.icon_placement === "right" ? toggle.icon_placement : "left",
+      state_entity: String(toggle?.state_entity || ""), placement, order: groups[placement],
+      active_color: String(toggle?.active_color || "#2e9d5b"), on_service: String(toggle?.on_service || ""), on_service_data: String(toggle?.on_service_data || ""),
+      off_service: String(toggle?.off_service || ""), off_service_data: String(toggle?.off_service_data || ""), sync_state: toggle?.sync_state !== false,
+      type: toggle?.type === "automation" ? "automation" : "script", on_target: String(toggle?.on_target || ""), off_target: String(toggle?.off_target || ""),
+      subtitle: String(toggle?.subtitle || ""), confirm: toggle?.confirm === true, off_long_press: toggle?.off_long_press === true, hide_unavailable: toggle?.hide_unavailable === true,
+    };
+  });
+}
+
+const profileSettings = (profile: EchoSavedDashboardProfile): Partial<EchoDashboardConfig> => profile.settings || {
+  menus: profile.menus || [],
+  menu_toggles: profile.menu_toggles || [],
+  menu_statuses: profile.menu_statuses || [],
+  camera_order: profile.camera_order || [],
+  camera_overlays: profile.camera_overlays || {},
+  camera_spans: profile.camera_spans || {},
+  camera_refresh_interval: profile.camera_refresh_interval || 3000,
+  camera_refresh_intervals: profile.camera_refresh_intervals || {},
+  camera_person_entities: profile.camera_person_entities || {},
+  person_detection: profile.person_detection || {},
+  detection_types: profile.detection_types || [],
+  camera_detections: profile.camera_detections || {},
+  kiosk_mode: profile.kiosk_mode || "inherit",
+  echo_target: profile.echo_target || "",
+  echo_mode: profile.echo_mode || "Streamed",
+  echo_dashboard_when_idle: Boolean(profile.echo_dashboard_when_idle),
+};
+
+const dashSettings = (config: EchoDashboardConfig): Partial<EchoDashboardConfig> => ({
+  menus: config.menus || [],
+  menu_toggles: config.menu_toggles || [],
+  menu_statuses: config.menu_statuses || [],
+  camera_order: config.camera_order || [],
+  camera_overlays: config.camera_overlays || {},
+  camera_spans: config.camera_spans || {},
+  camera_refresh_interval: config.camera_refresh_interval || 3000,
+  camera_refresh_intervals: config.camera_refresh_intervals || {},
+  camera_person_entities: config.camera_person_entities || {},
+  person_detection: config.person_detection || {},
+  detection_types: config.detection_types || [],
+  camera_detections: config.camera_detections || {},
+  kiosk_mode: kioskModeSetting(config.kiosk_mode, "inherit"),
+  echo_target: config.echo_target || "",
+  echo_mode: config.echo_mode || "Streamed",
+  echo_dashboard_when_idle: Boolean(config.echo_dashboard_when_idle),
+});
+
+function cardLayoutsFor(ids: string[], existing: Record<string, any> | undefined): Record<string, { order: number; width: number; height: number }> {
+  return ids.reduce((layouts, id, index) => {
+    const current = existing?.[id] || {};
+    layouts[id] = {
+      order: Math.max(1, Math.min(ids.length, Number(current.order) || index + 1)),
+      width: Math.max(1, Math.min(3, Number(current.width) || 1)),
+      height: Math.max(1, Math.min(2, Number(current.height) || 1)),
+    };
+    return layouts;
+  }, {} as Record<string, { order: number; width: number; height: number }>);
+}
+
 function escapeHtml(value: unknown): string {
   return String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
+function iconChoiceMarkup(value: string, label: string): string {
+  return `<button type="button" data-menu-icon-choice="${escapeHtml(value)}" title="${escapeHtml(label)}">${value ? `<ha-icon icon="${escapeHtml(value)}"></ha-icon>` : `<span class="no-icon-mark">×</span>`}<span>${escapeHtml(label)}</span></button>`;
+}
+
+function toggleIconChoiceMarkup(value: string, label: string): string {
+  return `<button type="button" data-toggle-icon-choice="${escapeHtml(value)}" title="${escapeHtml(label)}">${value ? `<ha-icon icon="${escapeHtml(value)}"></ha-icon>` : `<span class="no-icon-mark">×</span>`}<span>${escapeHtml(label)}</span></button>`;
+}
+
 function getMenuProfiles(config: any, cameras: Array<{ entityId: string }>, lights: any[], temperatures: any[] = []): EchoMenuConfig[] {
-  if (Array.isArray(config.menus) && config.menus.length) {
+  if (Array.isArray(config.menus)) {
     return config.menus.map((menu: any, index: number) => ({
       id: String(menu.id || `menu-${index + 1}`),
       label: String(menu.label || `Menu ${index + 1}`),
-      icon: String(menu.icon || "mdi:view-dashboard"),
+      // Old setups with no icon field keep their familiar default. A blank
+      // icon field is intentional and must remain blank when the editor saves.
+      icon: Object.prototype.hasOwnProperty.call(menu, "icon") ? String(menu.icon || "") : "mdi:view-dashboard",
+      icon_placement: menu.icon_placement === "center" || menu.icon_placement === "right" ? menu.icon_placement : "left",
       cameras: Array.isArray(menu.cameras) ? menu.cameras : [],
       lights: Array.isArray(menu.lights) ? menu.lights : [],
       temperatures: Array.isArray(menu.temperatures) ? menu.temperatures : [],
@@ -65,6 +187,8 @@ function getMenuProfiles(config: any, cameras: Array<{ entityId: string }>, ligh
       source: menu.source === "lovelace_card" ? "lovelace_card" : "menu",
       lovelace_card_ids: Array.isArray(menu.lovelace_card_ids) ? menu.lovelace_card_ids.map(String) : menu.lovelace_card_id ? [String(menu.lovelace_card_id)] : [],
       lovelace_card_id: String(menu.lovelace_card_id || ""),
+      lovelace_card_layouts: cardLayoutsFor(Array.isArray(menu.lovelace_card_ids) ? menu.lovelace_card_ids.map(String) : menu.lovelace_card_id ? [String(menu.lovelace_card_id)] : [], menu.lovelace_card_layouts),
+      content_overflow: menu.content_overflow === "scroll" ? "scroll" : "fit",
     }));
   }
   const legacy = Array.isArray(config.menu) && config.menu.length ? config.menu : ["cameras"];
@@ -91,6 +215,7 @@ class EchoShowEditor extends HTMLElement {
   private managedDashboardsLoading = false;
   private managedDashboardsError = "";
   private dashboardDestinations: DashboardDestination[] = [{ path: "/lovelace/0", label: "Overview — /lovelace/0" }];
+  private standardDashboards: Array<{ title: string; url_path: string }> = [{ title: "Overview", url_path: "lovelace" }];
   private dashboardDestinationsLoaded = false;
   private dashboardDestinationsLoading = false;
   private dashboardDestinationsError = "";
@@ -101,7 +226,20 @@ class EchoShowEditor extends HTMLElement {
   private areaRegistryError = "";
   private menuAreaFilters: Record<string, string> = {};
   private selectedProfileId = "";
-  setConfig(config: any) { this.config = { ...config }; this.render(); }
+  private mdiIconNames: string[] = [];
+  private mdiIconLoad?: Promise<string[]>;
+  private builderTitleChecked = false;
+  private hasUnsavedChanges = false;
+  /** Prevent Home Assistant's echo of a normal Save Dash from redrawing this editor. */
+  private preserveEditorOnNextConfig = false;
+  setConfig(config: any) {
+    const preserveEditor = this.preserveEditorOnNextConfig;
+    this.preserveEditorOnNextConfig = false;
+    this.config = { ...config };
+    if (!this.selectedProfileId && this.config.active_profile_id) this.selectedProfileId = String(this.config.active_profile_id);
+    this.hasUnsavedChanges = false;
+    if (!preserveEditor) this.render();
+  }
   getCurrentConfig(): any {
     const root = this.shadowRoot;
     if (!root) return this.config;
@@ -116,7 +254,9 @@ class EchoShowEditor extends HTMLElement {
       return {
         id,
         label: card.querySelector<HTMLInputElement>("[data-menu-label]")?.value.trim() || `Menu ${index + 1}`,
-        icon: card.querySelector<HTMLInputElement>("[data-menu-icon]")?.value.trim() || "mdi:view-dashboard",
+        icon: card.querySelector<HTMLInputElement>("[data-menu-icon]")?.value.trim() || "",
+        icon_entity: card.querySelector<HTMLInputElement>("[data-menu-icon-entity]")?.value.trim() || "",
+        icon_placement: card.querySelector<HTMLSelectElement>("[data-menu-icon-placement]")?.value === "center" ? "center" : card.querySelector<HTMLSelectElement>("[data-menu-icon-placement]")?.value === "right" ? "right" : "left",
         cameras: selected("[data-menu-camera]", existing?.cameras),
         lights: selected("[data-menu-light]", existing?.lights),
         temperatures: selected("[data-menu-temperature]", existing?.temperatures),
@@ -126,6 +266,8 @@ class EchoShowEditor extends HTMLElement {
           : card.querySelector<HTMLSelectElement>("[data-menu-destination]")?.value || "",
         source: card.querySelector<HTMLSelectElement>("[data-menu-source]")?.value === "lovelace_card" ? "lovelace_card" : "menu",
         lovelace_card_ids: Array.from(card.querySelectorAll<HTMLInputElement>("[data-menu-lovelace-card]:checked"), (input) => input.value),
+        lovelace_card_layouts: existing?.lovelace_card_layouts || {},
+        content_overflow: card.querySelector<HTMLSelectElement>("[data-menu-content-overflow]")?.value === "scroll" ? "scroll" : "fit",
       };
     });
     const cameraOrder = Array.from(root.querySelectorAll<HTMLSelectElement>("[data-order]"))
@@ -147,14 +289,74 @@ class EchoShowEditor extends HTMLElement {
       if (Number(select.value) > 0) cameraRefreshIntervals[entity] = Number(select.value);
       else delete cameraRefreshIntervals[entity];
     });
+    const detectionTypes = Array.from(root.querySelectorAll<HTMLElement>("[data-detection-type]")).map((card, index) => ({
+      id: card.dataset.detectionType || `detection-${index + 1}`,
+      label: card.querySelector<HTMLInputElement>("[data-detection-label]")?.value.trim() || `Detection ${index + 1}`,
+      match: card.querySelector<HTMLInputElement>("[data-detection-match]")?.value.trim() || "",
+      animation: card.querySelector<HTMLSelectElement>("[data-detection-animation]")?.value || "soft-pulse",
+      color: card.querySelector<HTMLInputElement>("[data-detection-color]")?.value || "#ffc107",
+      show_badge: card.querySelector<HTMLInputElement>("[data-detection-badge]")?.checked === true,
+      badge_text: card.querySelector<HTMLInputElement>("[data-detection-badge-text]")?.value.trim() || "",
+    }));
+    const cameraDetections: Record<string, any[]> = {};
+    root.querySelectorAll<HTMLSelectElement>("[data-camera-detection]").forEach((select) => {
+      if (!select.value) return;
+      const [camera, typeId] = String(select.dataset.cameraDetection || "").split("::");
+      if (!camera || !typeId) return;
+      (cameraDetections[camera] ||= []).push({ id: typeId, type_id: typeId, entity: select.value });
+    });
+    const menuToggles = Array.from(root.querySelectorAll<HTMLElement>("[data-toggle-card]")).map((card, index) => ({
+      id: card.dataset.toggleCard || `toggle-${index + 1}`,
+      label: card.querySelector<HTMLInputElement>("[data-toggle-label]")?.value.trim() || `Toggle ${index + 1}`,
+      on_label: card.querySelector<HTMLInputElement>("[data-toggle-on-label]")?.value.trim() || "",
+      off_label: card.querySelector<HTMLInputElement>("[data-toggle-off-label]")?.value.trim() || "",
+      icon: card.querySelector<HTMLInputElement>("[data-toggle-icon]")?.value.trim() || "",
+      icon_entity: card.querySelector<HTMLInputElement>("[data-toggle-icon-entity]")?.value.trim() || "",
+      icon_placement: card.querySelector<HTMLSelectElement>("[data-toggle-icon-placement]")?.value === "center" ? "center" : card.querySelector<HTMLSelectElement>("[data-toggle-icon-placement]")?.value === "right" ? "right" : "left",
+      state_entity: card.querySelector<HTMLSelectElement>("[data-toggle-state]")?.value || "",
+      placement: card.querySelector<HTMLSelectElement>("[data-toggle-placement]")?.value === "right" ? "right" : "left",
+      order: Number(card.querySelector<HTMLSelectElement>("[data-toggle-order]")?.value || index + 1),
+      active_color: card.querySelector<HTMLInputElement>("[data-toggle-color]")?.value.trim() || "#2e9d5b",
+      type: card.querySelector<HTMLSelectElement>("[data-toggle-type]")?.value === "automation" ? "automation" : "script",
+      on_target: card.querySelector<HTMLSelectElement>("[data-toggle-on-target]")?.value || "",
+      off_target: card.querySelector<HTMLSelectElement>("[data-toggle-off-target]")?.value || "",
+      subtitle: card.querySelector<HTMLInputElement>("[data-toggle-subtitle]")?.value.trim() || "",
+      confirm: card.querySelector<HTMLInputElement>("[data-toggle-confirm]")?.checked === true,
+      off_long_press: card.querySelector<HTMLInputElement>("[data-toggle-long-press]")?.checked === true,
+      hide_unavailable: card.querySelector<HTMLInputElement>("[data-toggle-hide-unavailable]")?.checked === true,
+      on_service: card.querySelector<HTMLInputElement>("[data-toggle-on-service]")?.value.trim() || "",
+      on_service_data: card.querySelector<HTMLInputElement>("[data-toggle-on-data]")?.value.trim() || "",
+      off_service: card.querySelector<HTMLInputElement>("[data-toggle-off-service]")?.value.trim() || "",
+      off_service_data: card.querySelector<HTMLInputElement>("[data-toggle-off-data]")?.value.trim() || "",
+      sync_state: card.querySelector<HTMLInputElement>("[data-toggle-sync]")?.checked !== false,
+    }));
+    const menuStatuses = Array.from(root.querySelectorAll<HTMLElement>("[data-status-card]")).map((card, index) => ({
+      id: card.dataset.statusCard || `status-${index + 1}`,
+      label: card.querySelector<HTMLInputElement>("[data-status-label]")?.value.trim() || "",
+      icon: card.querySelector<HTMLInputElement>("[data-status-icon]")?.value.trim() || "",
+      icon_entity: card.querySelector<HTMLInputElement>("[data-status-icon-entity]")?.value.trim() || "",
+      type: card.querySelector<HTMLSelectElement>("[data-status-type]")?.value === "time" ? "time" : "entity",
+      time_format: card.querySelector<HTMLSelectElement>("[data-status-time-format]")?.value === "24" ? "24" : "12",
+      entity: card.querySelector<HTMLSelectElement>("[data-status-entity]")?.value || "",
+      placement: card.querySelector<HTMLSelectElement>("[data-status-placement]")?.value === "right" ? "right" : "left",
+      alignment: card.querySelector<HTMLSelectElement>("[data-status-alignment]")?.value === "center" ? "center" : card.querySelector<HTMLSelectElement>("[data-status-alignment]")?.value === "right" ? "right" : "left",
+      order: Number(card.querySelector<HTMLSelectElement>("[data-status-order]")?.value || index + 1),
+      action: card.querySelector<HTMLSelectElement>("[data-status-action]")?.value === "navigate" ? "navigate" : card.querySelector<HTMLSelectElement>("[data-status-action]")?.value === "service" ? "service" : "none",
+      destination: card.querySelector<HTMLInputElement>("[data-status-destination]")?.value.trim() || "",
+      service: card.querySelector<HTMLInputElement>("[data-status-service]")?.value.trim() || "",
+    }));
     return {
       ...this.config,
       menus,
+      menu_toggles: normaliseMenuToggles(menuToggles),
+      menu_statuses: menuStatuses,
       camera_order: cameraOrder,
       camera_overlays: cameraOverlays,
       camera_spans: cameraSpans,
       camera_refresh_interval: Math.max(100, Number(root.querySelector<HTMLSelectElement>("#camera-refresh-default")?.value || this.config.camera_refresh_interval || 3000)),
       camera_refresh_intervals: cameraRefreshIntervals,
+      detection_types: detectionTypes,
+      camera_detections: cameraDetections,
       echo_target: root.querySelector<HTMLSelectElement>("#echo-target")?.value || "",
       echo_mode: root.querySelector<HTMLSelectElement>("#echo-mode")?.value || "Streamed",
       echo_dashboard_when_idle: root.querySelector<HTMLInputElement>("#echo-idle")?.checked || false,
@@ -163,24 +365,17 @@ class EchoShowEditor extends HTMLElement {
   }
   getConfigForSave(): any {
     const config = this.getCurrentConfig();
-    const name = this.shadowRoot?.querySelector<HTMLInputElement>("#profile-name")?.value.trim() || "";
-    if (!name) return config;
-    const id = this.selectedProfileId || `setup-${Date.now()}`;
+    const previous = (this.config.saved_profiles || []).find((profile: EchoSavedDashboardProfile) => profile.id === this.selectedProfileId);
+    if (!previous) return config;
     const profile: EchoSavedDashboardProfile = {
-      id,
-      name,
-      menus: config.menus,
-      camera_order: config.camera_order,
-      camera_overlays: config.camera_overlays,
-      camera_spans: config.camera_spans,
-      camera_refresh_interval: config.camera_refresh_interval,
-      camera_refresh_intervals: config.camera_refresh_intervals,
-      kiosk_mode: kioskModeSetting(config.kiosk_mode, this.config.echo_managed ? "enabled" : "inherit"),
+      ...previous,
+      menus: config.menus || [],
+      settings: dashSettings(config),
     };
     return {
       ...config,
-      saved_profiles: [...(this.config.saved_profiles || []).filter((item: any) => item.id !== id), profile],
-      active_profile_id: id,
+      saved_profiles: [...(this.config.saved_profiles || []).filter((item: any) => item.id !== profile.id), profile],
+      active_profile_id: profile.id,
     };
   }
   set hass(value: Hass) {
@@ -190,21 +385,46 @@ class EchoShowEditor extends HTMLElement {
     if (!this.managedDashboardsLoaded && !this.managedDashboardsLoading) void this.loadManagedDashboards();
     if (!this.dashboardDestinationsLoaded && !this.dashboardDestinationsLoading) void this.loadDashboardDestinations();
     if (!this.areaRegistryLoaded && !this.areaRegistryLoading) void this.loadAreaRegistry();
+    if (!this.builderTitleChecked) void this.ensureBuilderTitle();
   }
   connectedCallback() { this.render(); }
   private emit(patch: Record<string, unknown>, rerender = true) {
     this.config = { ...this.config, ...patch };
-    this.dispatchEvent(new CustomEvent("config-changed", { bubbles: true, composed: true, detail: { config: this.config } }));
+    this.hasUnsavedChanges = true;
+    // When rendered as the master builder page, persistence is handled by the
+    // builder's own WebSocket save. Sending Home Assistant's editor event here
+    // makes it try to reinterpret this card as a dashboard strategy.
+    if (!this.config.builder_standalone) this.dispatchEvent(new CustomEvent("config-changed", { bubbles: true, composed: true, detail: { config: this.config } }));
     if (rerender) this.render();
   }
   private emitCurrentConfig() {
     this.config = this.getCurrentConfig();
-    this.dispatchEvent(new CustomEvent("config-changed", { bubbles: true, composed: true, detail: { config: this.config } }));
+    this.hasUnsavedChanges = true;
+    if (!this.config.builder_standalone) this.dispatchEvent(new CustomEvent("config-changed", { bubbles: true, composed: true, detail: { config: this.config } }));
   }
   private callWS(message: Record<string, unknown>): Promise<any> {
     if (this._hass?.callWS) return this._hass.callWS(message);
     if (this._hass?.connection?.sendMessagePromise) return this._hass.connection.sendMessagePromise(message);
     return Promise.reject(new Error("Home Assistant dashboard management is unavailable."));
+  }
+  private async ensureBuilderTitle() {
+    this.builderTitleChecked = true;
+    const urlPath = window.location.pathname.split("/").filter(Boolean)[0];
+    if (urlPath !== "echo-show-html-dash-builder") return;
+    const title = "Echo Show Dash HTML Builder";
+    try {
+      const dashboards = await this.callWS({ type: "lovelace/dashboards/list" });
+      const dashboard = Array.isArray(dashboards) ? dashboards.find((item: any) => String(item.url_path) === urlPath) : undefined;
+      if (dashboard?.id && dashboard.title !== title) {
+        await this.callWS({ type: "lovelace/dashboards/update", dashboard_id: dashboard.id, title, icon: dashboard.icon || null, show_in_sidebar: dashboard.show_in_sidebar !== false, require_admin: dashboard.require_admin === true });
+      }
+      const config = await this.callWS({ type: "lovelace/config", url_path: urlPath });
+      if ((config?.strategy?.type === "custom:echo-show" || config?.strategy?.type === "custom:echo-show-editor") && (config.strategy.title !== title || config.strategy.type !== "custom:echo-show" || config.strategy.echo_managed !== false)) {
+        await this.callWS({ type: "lovelace/config/save", url_path: urlPath, config: { strategy: { ...config.strategy, type: "custom:echo-show", title, echo_managed: false } } });
+      }
+    } catch {
+      // The editor remains usable if the title can only be changed by an admin.
+    }
   }
   private async persistBuilderConfig(config: any): Promise<void> {
     const masterUrlPath = window.location.pathname.split("/").filter(Boolean)[0];
@@ -297,6 +517,11 @@ class EchoShowEditor extends HTMLElement {
     try {
       const dashboards = await this.callWS({ type: "lovelace/dashboards/list" });
       const listed = Array.isArray(dashboards) ? dashboards : [];
+      this.standardDashboards = [{ title: "Overview", url_path: "lovelace" }, ...listed
+        .filter((dashboard: any) => dashboard?.url_path && String(dashboard.url_path) !== "echo-show-html-dash-builder")
+        .map((dashboard: any) => ({ title: String(dashboard.title || dashboard.url_path), url_path: String(dashboard.url_path) }))]
+        .filter((dashboard, index, array) => array.findIndex((item) => item.title === dashboard.title) === index)
+        .sort((a, b) => a.title.localeCompare(b.title));
       const destinations: DashboardDestination[] = [{ path: "/lovelace/0", label: "Overview — /lovelace/0" }];
       for (const dashboard of listed) {
         const urlPath = String(dashboard?.url_path || "").trim();
@@ -370,6 +595,16 @@ class EchoShowEditor extends HTMLElement {
       return { key, label: friendly.replace(/ dashboard to show$/i, ""), dashboard, dashboardToShow, idle };
     }).filter((target) => states[target.dashboard] || states[target.dashboardToShow]);
   }
+  private async loadMdiIconNames(): Promise<string[]> {
+    if (this.mdiIconNames.length) return this.mdiIconNames;
+    if (!this.mdiIconLoad) this.mdiIconLoad = fetch("https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.css")
+      .then((response) => response.ok ? response.text() : "")
+      .then((css) => Array.from(css.matchAll(/\.mdi-([a-z0-9-]+)::?before/g), (match) => `mdi:${match[1]}`))
+      .then((names) => [...new Set(names)].sort())
+      .catch(() => []);
+    this.mdiIconNames = await this.mdiIconLoad;
+    return this.mdiIconNames;
+  }
   private render() {
     if (!this.shadowRoot) this.attachShadow({ mode: "open" });
     const root = this.shadowRoot!;
@@ -394,10 +629,31 @@ class EchoShowEditor extends HTMLElement {
       return entity.startsWith("sensor.") && (state.attributes?.device_class === "temperature" || hasTemperatureWord || (hasTempWord && !looksLikeCompanionSensor));
     }).sort((a: any, b: any) => String(a.attributes?.friendly_name || a.entity_id).localeCompare(String(b.attributes?.friendly_name || b.entity_id)));
     const menuProfiles = getMenuProfiles(this.config, cameras, lights, temperatures);
+    const menuToggles = normaliseMenuToggles(this.config.menu_toggles);
+    const menuStatuses: EchoMenuStatusConfig[] = Array.isArray(this.config.menu_statuses) ? this.config.menu_statuses : [];
+    const toggleEntities = Object.values(this._hass?.states || {}).filter((state: any) => /^(input_boolean|switch)\./.test(String(state.entity_id || ""))).sort((a: any, b: any) => String(a.attributes?.friendly_name || a.entity_id).localeCompare(String(b.attributes?.friendly_name || b.entity_id)));
+    const scripts = Object.values(this._hass?.states || {}).filter((state: any) => String(state.entity_id || "").startsWith("script.")).sort((a: any, b: any) => String(a.attributes?.friendly_name || a.entity_id).localeCompare(String(b.attributes?.friendly_name || b.entity_id)));
+    const automations = Object.values(this._hass?.states || {}).filter((state: any) => String(state.entity_id || "").startsWith("automation.")).sort((a: any, b: any) => String(a.attributes?.friendly_name || a.entity_id).localeCompare(String(b.attributes?.friendly_name || b.entity_id)));
     const savedProfiles: EchoSavedDashboardProfile[] = Array.isArray(this.config.saved_profiles) ? this.config.saved_profiles : [];
     const overlays = this.config.camera_overlays || {};
     const spans = this.config.camera_spans || {};
     const cameraRefreshIntervals = this.config.camera_refresh_intervals || {};
+    const detectionTypes: Array<any> = Array.isArray(this.config.detection_types) && this.config.detection_types.length ? this.config.detection_types : [
+      { id: "person", label: "Person", match: "person", animation: "soft-pulse", color: "#ffc107", show_badge: false, badge_text: "Person" },
+      { id: "dog", label: "Dog", match: "dog", animation: "soft-pulse", color: "#7e57c2", show_badge: true, badge_text: "Dog" },
+    ];
+    // Preserve earlier per-camera person selections while presenting the new
+    // multi-type editor. Saving without touching them must not remove alerts.
+    const cameraDetections = { ...(this.config.camera_detections || {}) } as Record<string, any[]>;
+    for (const [camera, entity] of Object.entries(this.config.camera_person_entities || {})) {
+      if (!cameraDetections[camera]?.length && entity) cameraDetections[camera] = [{ id: "person", type_id: "person", entity }];
+    }
+    const entityOptionLabel = (state: any) => {
+      const name = String(state?.attributes?.friendly_name || state?.entity_id || "");
+      const value = String(state?.state ?? "unknown");
+      const unit = String(state?.attributes?.unit_of_measurement || "").trim();
+      return `${name} — ${value}${unit ? ` ${unit}` : ""} — ${String(state?.entity_id || "")}`;
+    };
     const cameraRefreshInterval = Math.max(100, Number(this.config.camera_refresh_interval || this.config.refresh_interval || 3000));
     const configuredOrder: string[] = Array.isArray(this.config.camera_order) ? this.config.camera_order : [];
     const cameraOrder = [...configuredOrder.filter((entity) => cameras.some((camera) => camera.entityId === entity)), ...cameras.filter((camera) => !configuredOrder.includes(camera.entityId)).map((camera) => camera.entityId)];
@@ -408,7 +664,20 @@ class EchoShowEditor extends HTMLElement {
       const refreshOverride = Number(cameraRefreshIntervals[camera.entityId]) || 0;
       const position = cameraOrder.indexOf(camera.entityId) + 1;
       const stateKey = `${menuId}::${camera.entityId}`;
-      const settingsOpen = EchoShowEditor.openCameraSettings[stateKey] ?? true;
+      const settingsOpen = EchoShowEditor.openCameraSettings[stateKey] ?? false;
+      const cameraArea = this.entityAreas[camera.entityId] || "";
+      const cameraWords = `${camera.entityId} ${camera.label}`.toLowerCase().replace(/[_-]+/g, " ").split(/\s+/).filter((word) => word.length > 2 && !["camera"].includes(word));
+      const detectionOptions = (type: any) => Object.values(this._hass?.states || {}).filter((state: any) => {
+        const entity = String(state.entity_id || "");
+        const text = `${entity} ${state.attributes?.friendly_name || ""}`.toLowerCase().replace(/[_-]+/g, " ");
+        const typeWords = String(type.match || type.label || "").toLowerCase().replace(/[_-]+/g, " ").split(/\s+/).filter(Boolean);
+        const supportedSignal = entity.startsWith("binary_sensor.") || (entity.startsWith("sensor.") && /(active\s+)?count|occupancy/i.test(text));
+        return supportedSignal && typeWords.some((word) => text.includes(word)) && (cameraArea ? this.entityAreas[entity] === cameraArea : cameraWords.some((word) => text.includes(word)));
+      }).sort((a: any, b: any) => String(a.attributes?.friendly_name || a.entity_id).localeCompare(String(b.attributes?.friendly_name || b.entity_id)));
+      const detectionRows = detectionTypes.map((type) => {
+        const choices = detectionOptions(type); const current = (cameraDetections[camera.entityId] || []).find((item: any) => item.type_id === type.id)?.entity || "";
+        return `<label>${escapeHtml(type.label)} entity <select data-camera-detection="${escapeHtml(`${camera.entityId}::${type.id}`)}"><option value="">No ${escapeHtml(type.label)} alert</option>${choices.map((state: any) => `<option value="${escapeHtml(state.entity_id)}" ${state.entity_id === current ? "selected" : ""}>${escapeHtml(entityOptionLabel(state))}</option>`).join("")}</select></label>`;
+      }).join("");
       return `<details class="camera-appearance" data-camera-appearance="${escapeHtml(stateKey)}" ${settingsOpen ? "open" : ""}>
         <summary>Camera size, order &amp; overlay</summary>
         <div class="camera-settings-row"><label>Order <select data-order="${escapeHtml(camera.entityId)}">${orderedCameras.map((_, i) => `<option value="${i + 1}" ${position === i + 1 ? "selected" : ""}>${i + 1}</option>`).join("")}</select></label>
@@ -416,7 +685,7 @@ class EchoShowEditor extends HTMLElement {
         <label>Name position <select data-overlay-h="${escapeHtml(camera.entityId)}"><option value="left" ${o.horizontal === "left" || !o.horizontal ? "selected" : ""}>Left</option><option value="center" ${o.horizontal === "center" ? "selected" : ""}>Centre</option><option value="right" ${o.horizontal === "right" ? "selected" : ""}>Right</option></select></label>
         <label>Vertical position <select data-overlay-v="${escapeHtml(camera.entityId)}"><option value="top" ${o.vertical === "top" ? "selected" : ""}>Top</option><option value="bottom" ${o.vertical !== "top" ? "selected" : ""}>Bottom</option></select></label>
         <label>Tile width <select data-span="${escapeHtml(camera.entityId)}"><option value="1" ${span === 1 ? "selected" : ""}>1 box</option><option value="2" ${span === 2 ? "selected" : ""}>2 boxes</option><option value="3" ${span === 3 ? "selected" : ""}>3 boxes</option></select></label>
-        <label>Image refresh <select data-camera-refresh="${escapeHtml(camera.entityId)}"><option value="0" ${refreshOverride === 0 ? "selected" : ""}>Use default (${cameraRefreshInterval < 1000 ? `${cameraRefreshInterval} ms` : `${cameraRefreshInterval / 1000}s`})</option>${[100, 250, 500, 1000, 2000, 3000, 5000, 10000, 15000].map((value) => `<option value="${value}" ${refreshOverride === value ? "selected" : ""}>${value === 100 ? "100 ms (10 fps, maximum load)" : value === 250 ? "250 ms (4 fps, high load)" : value === 500 ? "500 ms (2 fps)" : `${value / 1000}s`}</option>`).join("")}</select></label></div>
+        <label>Image refresh <select data-camera-refresh="${escapeHtml(camera.entityId)}"><option value="0" ${refreshOverride === 0 ? "selected" : ""}>Use default (${cameraRefreshInterval < 1000 ? `${cameraRefreshInterval} ms` : `${cameraRefreshInterval / 1000}s`})</option>${[100, 250, 500, 1000, 2000, 3000, 5000, 10000, 15000].map((value) => `<option value="${value}" ${refreshOverride === value ? "selected" : ""}>${value === 100 ? "100 ms (10 fps, maximum load)" : value === 250 ? "250 ms (4 fps, high load)" : value === 500 ? "500 ms (2 fps)" : `${value / 1000}s`}</option>`).join("")}</select></label>${detectionRows}</div>
         <div class="hint">These settings apply wherever this camera is used.</div></details>`;
     };
     const targets = this.targets();
@@ -428,7 +697,30 @@ class EchoShowEditor extends HTMLElement {
       ? Boolean(activeTarget && this._hass?.states[activeTarget.idle]?.state === "on")
       : Boolean(this.config.echo_dashboard_when_idle);
     const selectedKioskMode = kioskModeSetting(this.config.kiosk_mode, this.config.echo_managed ? "enabled" : "inherit");
+    const builderPath = window.location.pathname.split("/").filter(Boolean)[0] || "";
+    const wantedBuilderPath = "echo-show-html-dash-builder";
     const cardLibrary: EchoCardLibraryEntry[] = Array.isArray(this.config.card_library) ? this.config.card_library : [];
+    const toggleEditors = menuToggles.map((toggle) => {
+      const placement = toggle.placement === "right" ? "right" : "left";
+      const group = menuToggles.filter((item) => (item.placement === "right" ? "right" : "left") === placement);
+      const position = group.findIndex((item) => item.id === toggle.id) + 1;
+      const kind = toggle.type === "automation" ? "automation" : "script";
+      const actionTargets = kind === "automation" ? automations : scripts;
+      const actionName = kind === "automation" ? "automation" : "script";
+      const targetOptions = (selected: string, placeholder: string) => `<option value="">${placeholder}</option>${actionTargets.map((state: any) => `<option value="${escapeHtml(state.entity_id)}" ${state.entity_id === selected ? "selected" : ""}>${escapeHtml(entityOptionLabel(state))}</option>`).join("")}`;
+      const iconPlacement = toggle.icon_placement === "center" || toggle.icon_placement === "right" ? toggle.icon_placement : "left";
+      return `<details class="toggle-config" data-toggle-card="${escapeHtml(toggle.id)}"><summary>${escapeHtml(toggle.label)} toggle</summary>
+        <div class="row"><label>Button text <input type="text" data-toggle-label value="${escapeHtml(toggle.label)}"></label><label>Text when on <input type="text" data-toggle-on-label value="${escapeHtml(toggle.on_label)}" placeholder="Meeting mode on"></label><label>Text when off <input type="text" data-toggle-off-label value="${escapeHtml(toggle.off_label)}" placeholder="Meeting mode"></label></div>
+        <div class="row"><label class="icon-field">Icon (optional)<span class="icon-control"><span class="icon-preview" data-toggle-icon-preview>${toggle.icon ? `<ha-icon icon="${escapeHtml(toggle.icon)}"></ha-icon>` : "No icon"}</span><input type="text" data-toggle-icon value="${escapeHtml(toggle.icon)}" placeholder="Leave blank for no icon"><details class="icon-picker"><summary>Choose icon</summary><input type="search" data-toggle-icon-search placeholder="Search all Material Design icons"><div class="icon-options">${MENU_ICON_CHOICES.map(([value, label]) => toggleIconChoiceMarkup(value, label)).join("")}</div><div class="icon-search-status hint"></div></details></span></label><label>Icon follows state (optional)<input type="text" data-toggle-icon-entity value="${escapeHtml(toggle.icon_entity || "")}" placeholder="weather.home"></label><label class="state-field">State entity <select data-toggle-state><option value="">Select a toggle/helper</option>${toggleEntities.map((state: any) => `<option value="${escapeHtml(state.entity_id)}" ${state.entity_id === toggle.state_entity ? "selected" : ""}>${escapeHtml(entityOptionLabel(state))}</option>`).join("")}</select></label><label class="colour-field">On colour <input type="color" data-toggle-color value="${escapeHtml(/^#[0-9a-f]{6}$/i.test(toggle.active_color || "") ? toggle.active_color : "#2e9d5b")}"></label><label>Subtitle (optional) <input type="text" data-toggle-subtitle value="${escapeHtml(toggle.subtitle)}" placeholder="Lights dimmed"></label></div>
+        <div class="row"><label>Button placement <select data-toggle-placement><option value="left" ${placement === "left" ? "selected" : ""}>Left of menus</option><option value="right" ${placement === "right" ? "selected" : ""}>Right of menus</option></select></label><label>Icon placement <select data-toggle-icon-placement><option value="left" ${iconPlacement === "left" ? "selected" : ""}>Left</option><option value="center" ${iconPlacement === "center" ? "selected" : ""}>Middle</option><option value="right" ${iconPlacement === "right" ? "selected" : ""}>Right</option></select></label><label>Order <select data-toggle-order>${group.map((_, index) => `<option value="${index + 1}" ${position === index + 1 ? "selected" : ""}>${index + 1}</option>`).join("")}</select></label><label class="toggle-sync"><input type="checkbox" data-toggle-sync ${toggle.sync_state !== false ? "checked" : ""}> Update the state entity after the action</label></div>
+        <div class="toggle-actions"><strong>Actions</strong><div class="row"><label>Button type <select data-toggle-type><option value="script" ${kind === "script" ? "selected" : ""}>Script toggle</option><option value="automation" ${kind === "automation" ? "selected" : ""}>Automation toggle</option></select></label><label>When turning on <select data-toggle-on-target>${targetOptions(toggle.on_target || "", `Select ${actionName}`)}</select></label><label>When turning off <select data-toggle-off-target>${targetOptions(toggle.off_target || "", `Select ${actionName}`)}</select></label></div><div class="row"><label class="toggle-sync"><input type="checkbox" data-toggle-confirm ${toggle.confirm ? "checked" : ""}> Confirm before changing</label><label class="toggle-sync"><input type="checkbox" data-toggle-long-press ${toggle.off_long_press ? "checked" : ""}> Hold 0.7s to turn off</label><label class="toggle-sync"><input type="checkbox" data-toggle-hide-unavailable ${toggle.hide_unavailable ? "checked" : ""}> Hide if the state entity is unavailable</label></div><div class="hint">Scripts run with <code>script.turn_on</code>; automations run with <code>automation.trigger</code>. The state entity controls the label and colour.</div></div>
+        <button type="button" data-remove-toggle="${escapeHtml(toggle.id)}">Remove toggle</button>
+      </details>`;
+    }).join("");
+    const statusEntities = Object.values(this._hass?.states || {}).sort((a:any,b:any)=>String(a.attributes?.friendly_name||a.entity_id).localeCompare(String(b.attributes?.friendly_name||b.entity_id)));
+    const statusEditors = menuStatuses.map((status, index) => `<details class="toggle-config" data-status-card="${escapeHtml(status.id)}"><summary>${escapeHtml(status.label || (status.type === "time" ? "Time" : "Status display"))} status display</summary><div class="row"><label>Label <input type="text" data-status-label value="${escapeHtml(status.label || "")}" placeholder="Kitchen"></label><label>Icon <input type="text" data-status-icon value="${escapeHtml(status.icon || "")}" placeholder="mdi:thermometer"></label><label>Icon follows state (optional)<input type="text" data-status-icon-entity value="${escapeHtml(status.icon_entity || "")}" placeholder="weather.home"></label><label>Value type <select data-status-type><option value="time" ${status.type === "time" ? "selected" : ""}>Current time</option><option value="entity" ${status.type === "entity" ? "selected" : ""}>Entity state</option></select></label><label>Time display <select data-status-time-format ${status.type === "time" ? "" : "disabled"}><option value="12" ${status.time_format !== "24" ? "selected" : ""}>12-hour (Perth)</option><option value="24" ${status.time_format === "24" ? "selected" : ""}>24-hour (Perth)</option></select></label><label>Find entity <input type="search" data-status-entity-search placeholder="Type to filter by name"></label><label>Entity <select data-status-entity ${status.type === "time" ? "disabled" : ""}><option value="">Select an entity</option>${statusEntities.map((state:any)=>`<option value="${escapeHtml(state.entity_id)}" ${state.entity_id === status.entity ? "selected" : ""}>${escapeHtml(state.attributes?.friendly_name || state.entity_id)} — ${escapeHtml(state.entity_id)}</option>`).join("")}</select></label></div><div class="row"><label>Placement <select data-status-placement><option value="left" ${status.placement !== "right" ? "selected" : ""}>Left</option><option value="right" ${status.placement === "right" ? "selected" : ""}>Right</option></select></label><label>Order <select data-status-order><option value="${index + 1}" selected>${index + 1}</option></select></label><label>Tap action <select data-status-action><option value="none" ${!status.action || status.action === "none" ? "selected" : ""}>No action</option><option value="navigate" ${status.action === "navigate" ? "selected" : ""}>Navigate</option><option value="service" ${status.action === "service" ? "selected" : ""}>Run service</option></select></label><label>Destination / service <input type="text" data-status-destination value="${escapeHtml(status.destination || status.service || "")}" placeholder="/dashboard-home or script.example"></label></div><button type="button" data-remove-status="${escapeHtml(status.id)}">Remove status display</button></details>`).join("");
+    const detectionEditors = detectionTypes.map((type: any) => `<details class="toggle-config" data-detection-type="${escapeHtml(type.id)}"><summary>${escapeHtml(type.label)} detection style</summary><div class="row"><label>Type name <input type="text" data-detection-label value="${escapeHtml(type.label)}"></label><label>Match words <input type="text" data-detection-match value="${escapeHtml(type.match || type.label)}" placeholder="person, dog, car"></label><label>Animation <select data-detection-animation><option value="solid" ${type.animation === "solid" ? "selected" : ""}>Solid glow</option><option value="soft-pulse" ${!type.animation || type.animation === "soft-pulse" ? "selected" : ""}>Soft pulse</option><option value="beacon" ${type.animation === "beacon" ? "selected" : ""}>Beacon pulse</option><option value="corner" ${type.animation === "corner" ? "selected" : ""}>Corner indicator</option><option value="glow-badge" ${type.animation === "glow-badge" ? "selected" : ""}>Glow plus badge</option><option value="none" ${type.animation === "none" ? "selected" : ""}>None</option></select></label><label class="colour-field">Glow colour <input type="color" data-detection-color value="${escapeHtml(/^#[0-9a-f]{6}$/i.test(type.color || "") ? type.color : "#ffc107")}"></label><label class="toggle-sync"><input type="checkbox" data-detection-badge ${type.show_badge ? "checked" : ""}> Show badge</label><label>Badge text <input type="text" data-detection-badge-text value="${escapeHtml(type.badge_text || type.label)}"></label></div><button type="button" data-remove-detection-type="${escapeHtml(type.id)}">Remove type</button></details>`).join("");
+    const rememberedOpenMenuId = menuProfiles.find((menu) => EchoShowEditor.openMenuCards[menu.id])?.id || "";
     const menuEditors = menuProfiles.map((menu, index) => {
       const isLightsMenu = /lights?/i.test(menu.label);
       const pickerOpen = EchoShowEditor.openMenuPickers[menu.id] || [];
@@ -448,16 +740,24 @@ class EchoShowEditor extends HTMLElement {
       const customDestination = destination && !destinationIsListed ? `<label>Custom path <input type="text" data-menu-custom-destination value="${escapeHtml(destination)}" placeholder="/lovelace/0"></label>` : "";
       const lovelaceCards = cardLibrary.filter((card) => !card.missing);
       const selectedCards = new Set(Array.isArray(menu.lovelace_card_ids) && menu.lovelace_card_ids.length ? menu.lovelace_card_ids : menu.lovelace_card_id ? [menu.lovelace_card_id] : []);
-      const sourcePicker = menu.action === "navigate" ? "" : `<div class="row"><label>Button source <select data-menu-source><option value="menu" ${menu.source === "lovelace_card" ? "" : "selected"}>Menu content</option><option value="lovelace_card" ${menu.source === "lovelace_card" ? "selected" : ""}>Lovelace Cards</option></select></label></div>${menu.source === "lovelace_card" ? `<div class="card-picker"><strong>Cards in this menu</strong>${lovelaceCards.map((card) => `<label class="camera"><input type="checkbox" data-menu-lovelace-card value="${escapeHtml(card.id)}" ${selectedCards.has(card.id) ? "checked" : ""}>${escapeHtml(card.name)} — ${escapeHtml(card.card_type)}</label>`).join("") || `<div class="hint">No cards are available. Open the Custom Card Holder and Sync card library.</div>`}</div><div class="hint">Tick one or more cards. They are copied unchanged into this Echo menu when you apply the setup; their native actions remain available there.</div>` : ""}`;
-      const menuOpen = EchoShowEditor.openMenuCards[menu.id] ?? (index === 0 || isLightsMenu);
+      const selectedCardIds = Array.from(selectedCards);
+      const cardLayouts = cardLayoutsFor(selectedCardIds, menu.lovelace_card_layouts);
+      const sourcePicker = menu.action === "navigate" ? "" : `<div class="row"><label>Button source <select data-menu-source><option value="menu" ${menu.source === "lovelace_card" ? "" : "selected"}>Menu content</option><option value="lovelace_card" ${menu.source === "lovelace_card" ? "selected" : ""}>Lovelace Cards</option></select></label></div>${menu.source === "lovelace_card" ? `<div class="card-picker"><strong>Cards in this menu</strong>${lovelaceCards.map((card) => {
+        const selected = selectedCards.has(card.id);
+        const layout = cardLayouts[card.id] || { order: selectedCardIds.length + 1, width: 1, height: 1 };
+        const orderOptions = selected ? selectedCardIds.map((_, index) => `<option value="${index + 1}" ${layout.order === index + 1 ? "selected" : ""}>${index + 1}</option>`).join("") : `<option value="1">1</option>`;
+        const disabled = selected ? "" : "disabled";
+        return `<div class="custom-card-choice" data-card-layout="${escapeHtml(card.id)}"><label class="camera"><input type="checkbox" data-menu-lovelace-card value="${escapeHtml(card.id)}" ${selected ? "checked" : ""}>${escapeHtml(card.name)} — ${escapeHtml(card.card_type)}</label><div class="card-layout-inline" ${selected ? "" : "aria-disabled=\"true\""}><label>Order <select data-card-order="${escapeHtml(card.id)}" ${disabled}>${orderOptions}</select></label><label>Width <select data-card-width="${escapeHtml(card.id)}" ${disabled}><option value="1" ${layout.width === 1 ? "selected" : ""}>1 wide</option><option value="2" ${layout.width === 2 ? "selected" : ""}>2 wide</option><option value="3" ${layout.width === 3 ? "selected" : ""}>3 wide</option></select></label><label>Height <select data-card-height="${escapeHtml(card.id)}" ${disabled}><option value="1" ${layout.height === 1 ? "selected" : ""}>1 high</option><option value="2" ${layout.height === 2 ? "selected" : ""}>2 high</option></select></label></div></div>`;
+      }).join("") || `<div class="hint">No cards are available. Open the Custom Card Holder and Sync card library.</div>`}</div><div class="hint">Tick a card, then set its order and Echo size on the same line. Changing an order shifts the others so there are never duplicate positions.</div>` : ""}`;
+      const menuOpen = rememberedOpenMenuId === menu.id;
       return `<details class="menu-config" data-menu-card="${escapeHtml(menu.id)}" ${menuOpen ? "open" : ""}>
-      <summary>Menu ${index + 1}: ${escapeHtml(menu.label)}</summary>
-      <div class="row"><label>Menu order <select data-menu-order>${menuProfiles.map((_, optionIndex) => `<option value="${optionIndex + 1}" ${index === optionIndex ? "selected" : ""}>${optionIndex + 1}</option>`).join("")}</select></label><label>Menu name <input type="text" data-menu-label value="${escapeHtml(menu.label)}"></label><label>Icon <input type="text" data-menu-icon value="${escapeHtml(menu.icon || "mdi:view-dashboard")}" placeholder="mdi:home"></label></div>
-      <div class="row"><label>Action <select data-menu-action><option value="view" ${menu.action === "navigate" ? "" : "selected"}>Show this menu</option><option value="navigate" ${menu.action === "navigate" ? "selected" : ""}>Navigate to Dashboard</option></select></label>${menu.action === "navigate" ? `${destinationSelect}${customDestination}` : ""}</div>${menu.action === "navigate" ? `<div class="hint">Choose any available Home Assistant dashboard or view. Custom paths are limited to this Home Assistant instance and open in the current session without changing the Echo assignment.</div>${this.dashboardDestinationsLoading ? `<div class="hint">Loading dashboards and views…</div>` : ""}${this.dashboardDestinationsError ? `<div class="hint">Could not load the dashboard list: ${escapeHtml(this.dashboardDestinationsError)}</div>` : ""}` : ""}
+      <summary>Menu ${index + 1}: ${escapeHtml(menu.label)}<span class="menu-summary">${menu.action === "navigate" ? "Navigation" : menu.source === "lovelace_card" ? `${selectedCardIds.length} custom card${selectedCardIds.length === 1 ? "" : "s"}` : `${(menu.cameras || []).length + (menu.lights || []).length + (menu.temperatures || []).length} selected`} · Order ${index + 1}</span></summary>
+      <div class="row"><label class="order-field">Menu order <select data-menu-order>${menuProfiles.map((_, optionIndex) => `<option value="${optionIndex + 1}" ${index === optionIndex ? "selected" : ""}>${optionIndex + 1}</option>`).join("")}</select></label><label>Menu name <input type="text" data-menu-label value="${escapeHtml(menu.label)}"></label><label class="icon-field">Icon (optional)<span class="icon-control"><span class="icon-preview" data-icon-preview>${menu.icon ? `<ha-icon icon="${escapeHtml(menu.icon)}"></ha-icon>` : "No icon"}</span><input type="text" data-menu-icon value="${escapeHtml(menu.icon)}" placeholder="Leave blank for no icon"><details class="icon-picker"><summary>Choose icon</summary><input type="search" data-icon-search placeholder="Search all Material Design icons"><div class="icon-options">${MENU_ICON_CHOICES.map(([value, label]) => iconChoiceMarkup(value, label)).join("")}</div><div class="icon-search-status hint"></div></details></span></label><label class="placement-field">Icon placement <select data-menu-icon-placement><option value="left" ${menu.icon_placement === "left" ? "selected" : ""}>Left</option><option value="center" ${menu.icon_placement === "center" ? "selected" : ""}>Middle</option><option value="right" ${menu.icon_placement === "right" ? "selected" : ""}>Right</option></select></label></div>
+      <div class="row"><label>Action <select data-menu-action><option value="view" ${menu.action === "navigate" ? "" : "selected"}>Show this menu</option><option value="navigate" ${menu.action === "navigate" ? "selected" : ""}>Navigate to Dashboard</option></select></label><label>Icon follows state (optional)<input type="text" data-menu-icon-entity value="${escapeHtml(menu.icon_entity || "")}" placeholder="weather.home"></label>${menu.action === "navigate" ? `${destinationSelect}${customDestination}` : ""}</div>${menu.action === "navigate" ? `<div class="hint">Choose any available Home Assistant dashboard or view. Custom paths are limited to this Home Assistant instance and open in the current session without changing the Echo assignment.</div>${this.dashboardDestinationsLoading ? `<div class="hint">Loading dashboards and views…</div>` : ""}${this.dashboardDestinationsError ? `<div class="hint">Could not load the dashboard list: ${escapeHtml(this.dashboardDestinationsError)}</div>` : ""}` : `<div class="row"><label>Content below menu <select data-menu-content-overflow><option value="fit" ${menu.content_overflow === "scroll" ? "" : "selected"}>Fit to remaining area</option><option value="scroll" ${menu.content_overflow === "scroll" ? "selected" : ""}>Scrollable below menu</option></select></label></div><div class="hint">The menu bar remains fixed. Fit to remaining area responsively scales the content below it; Scrollable below menu keeps its selected size and scrolls only that area.</div>`}
       ${sourcePicker}
       <div class="row">${areaSelect}</div>${this.areaRegistryError ? `<div class="hint">Area filters are unavailable: ${escapeHtml(this.areaRegistryError)}</div>` : this.areaRegistryLoading ? `<div class="hint">Loading Home Assistant areas…</div>` : `<div class="hint">Choose an area to narrow the camera, light, and temperature lists for this menu, then tick the entities you want to show.</div>`}
-      ${menu.action === "navigate" ? "" : `<details class="content-picker" ${(pickerOpen[0] ?? (menu.cameras || []).length > 0) ? "open" : ""}><summary>Cameras · ${(menu.cameras || []).length} selected</summary>${menuCameras.length ? menuCameras.map((camera) => `<div class="camera-choice"><label class="camera"><input type="checkbox" data-menu-camera value="${escapeHtml(camera.entityId)}" ${(menu.cameras || []).includes(camera.entityId) ? "checked" : ""}>${escapeHtml(camera.label)}</label>${(menu.cameras || []).includes(camera.entityId) ? cameraAppearance(camera, menu.id) : ""}</div>`).join("") : `<div class="hint">No cameras are available in this area.</div>`}</details>
-      <details class="content-picker" ${(pickerOpen[1] ?? isLightsMenu) ? "open" : ""}><summary>Choose lights · ${(menu.lights || []).length} selected</summary>${menuLights.length ? menuLights.map((light: any) => `<label class="camera"><input type="checkbox" data-menu-light value="${escapeHtml(light.entity_id)}" ${(menu.lights || []).includes(light.entity_id) ? "checked" : ""}>${escapeHtml(light.attributes?.friendly_name || light.entity_id)}</label>`).join("") : `<div class="hint">No lights are available in this area.</div>`}</details>
+      ${menu.action === "navigate" ? "" : `<details class="content-picker" ${(pickerOpen[0] ?? false) ? "open" : ""}><summary>Cameras · ${(menu.cameras || []).length} selected</summary>${menuCameras.length ? menuCameras.map((camera) => `<div class="camera-choice"><label class="camera"><input type="checkbox" data-menu-camera value="${escapeHtml(camera.entityId)}" ${(menu.cameras || []).includes(camera.entityId) ? "checked" : ""}>${escapeHtml(camera.label)}</label>${(menu.cameras || []).includes(camera.entityId) ? cameraAppearance(camera, menu.id) : ""}</div>`).join("") : `<div class="hint">No cameras are available in this area.</div>`}</details>
+      <details class="content-picker" ${(pickerOpen[1] ?? false) ? "open" : ""}><summary>Choose lights · ${(menu.lights || []).length} selected</summary>${menuLights.length ? menuLights.map((light: any) => `<label class="camera"><input type="checkbox" data-menu-light value="${escapeHtml(light.entity_id)}" ${(menu.lights || []).includes(light.entity_id) ? "checked" : ""}>${escapeHtml(light.attributes?.friendly_name || light.entity_id)}</label>`).join("") : `<div class="hint">No lights are available in this area.</div>`}</details>
       <details class="content-picker" ${(pickerOpen[2] ?? false) ? "open" : ""}><summary>Temperature sensors · ${(menu.temperatures || []).length} selected</summary>${menuTemperatures.length ? menuTemperatures.map((sensor: any) => `<label class="camera"><input type="checkbox" data-menu-temperature value="${escapeHtml(sensor.entity_id)}" ${(menu.temperatures || []).includes(sensor.entity_id) ? "checked" : ""}>${escapeHtml(sensor.attributes?.friendly_name || sensor.entity_id)}</label>`).join("") : `<div class="hint">No temperature sensors are available in this area.</div>`}</details>`}
       <button type="button" data-remove-menu ${menuProfiles.length <= 1 ? "disabled" : ""}>Remove menu</button>
     </details>`;
@@ -467,42 +767,76 @@ class EchoShowEditor extends HTMLElement {
       : `<div class="hint">${this.managedDashboardsError ? `Could not load managed dashboards: ${escapeHtml(this.managedDashboardsError)}` : "Dashboards created here will appear in this list."}</div>`;
     root.innerHTML = `<style>
       :host{display:block;font-family:Arial,sans-serif;padding:16px;box-sizing:border-box;color:var(--primary-text-color);--builder-line:var(--divider-color,rgba(127,127,127,.35))}
+      .section-nav{position:sticky;top:0;z-index:5;display:flex;gap:6px;overflow:auto;padding:8px 0;background:var(--card-background-color,var(--primary-background-color));border-bottom:1px solid var(--builder-line)}.section-nav a{flex:0 0 auto;padding:6px 9px;border:1px solid var(--builder-line);border-radius:999px;color:inherit;text-decoration:none;font-size:.88em}.section-nav a:hover,.section-nav a:focus{border-color:var(--primary-color,#03a9f4);outline:none}
       .section{margin:0;padding:22px 0 24px;border-top:2px solid var(--builder-line)}.section:first-of-type{border-top:0;padding-top:4px}
       .section h3{margin:0 0 10px;font-size:1.18rem;line-height:1.3}
-      .row{display:flex;gap:12px;align-items:center;margin:12px 0;flex-wrap:wrap}
-      .row>label{flex:1 1 220px}.row button{min-height:40px}
-      input[type=text],select{max-width:100%;box-sizing:border-box;padding:9px;border:1px solid var(--builder-line);border-radius:6px;background:var(--card-background-color,var(--primary-background-color));color:inherit}
+      details.custom-card-holder{padding-bottom:0}details.custom-card-holder>summary{display:flex;align-items:center;justify-content:space-between;cursor:pointer;font-size:1.18rem;font-weight:700;list-style:none}details.custom-card-holder>summary::-webkit-details-marker{display:none}details.custom-card-holder>summary::after{content:"⌄";font-size:1.1em}details.custom-card-holder:not([open])>summary::after{content:"›"}details.custom-card-holder>.holder-content{padding-top:14px}
+      .row{display:flex;gap:8px;align-items:end;margin:8px 0;flex-wrap:wrap}
+      .row>label{flex:1 1 170px}.row button{min-height:34px}
+      input[type=text],select{max-width:100%;box-sizing:border-box;padding:7px 8px;min-height:34px;border:1px solid var(--builder-line);border-radius:6px;background:var(--card-background-color,var(--primary-background-color));color:inherit}
       input[type=text]{width:100%}label{cursor:pointer}.hint{opacity:.78;font-size:.92em;line-height:1.45;max-width:75ch;margin:4px 0 10px}
-      .menu-config{border:1px solid var(--builder-line);border-radius:8px;padding:12px 14px;margin:12px 0;background:var(--card-background-color,rgba(127,127,127,.04))}
-      .menu-config>summary,.content-picker>summary{cursor:pointer;font-weight:600;min-height:30px;display:flex;align-items:center}
+      .icon-control{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:6px;align-items:center;margin-top:5px;position:relative}.icon-preview{display:grid;place-items:center;width:34px;height:34px;border:1px solid var(--builder-line);border-radius:6px;color:var(--primary-text-color);font-size:.68em;text-align:center}.icon-preview ha-icon{--mdc-icon-size:22px}.icon-picker{position:relative;z-index:20;min-width:0}.icon-picker>summary{cursor:pointer;font-weight:600;white-space:nowrap;padding:7px 8px;border:1px solid var(--builder-line);border-radius:6px;background:var(--card-background-color,var(--primary-background-color));list-style:none}.icon-picker>summary::-webkit-details-marker{display:none}.icon-picker[open]{position:absolute;top:calc(100% + 5px);right:0;width:min(440px,calc(100vw - 32px));padding:8px;border:1px solid var(--builder-line);border-radius:8px;background:var(--card-background-color,var(--primary-background-color));box-shadow:0 6px 18px rgba(0,0,0,.22)}.icon-picker[open]>summary{padding:3px 0 8px;border:0;border-radius:0;background:transparent}.icon-picker input[type=search]{width:100%;box-sizing:border-box;padding:8px;border:1px solid var(--builder-line);border-radius:6px;background:var(--card-background-color,var(--primary-background-color));color:inherit}.icon-options{display:grid;grid-template-columns:repeat(auto-fill,minmax(86px,1fr));gap:6px;margin-top:8px;max-height:320px;overflow:auto}.icon-options button{display:grid;place-items:center;gap:3px;min-height:66px;padding:6px;border:1px solid var(--builder-line);border-radius:6px;background:var(--card-background-color,var(--primary-background-color));color:inherit;cursor:pointer}.icon-options button:hover{border-color:var(--primary-color,#03a9f4);background:color-mix(in srgb,var(--primary-color,#03a9f4) 8%,transparent)}.icon-options ha-icon{--mdc-icon-size:28px}.icon-options button span:last-child{font-size:.78em}.no-icon-mark{font-size:28px;line-height:28px}
+      .menu-config{border:1px solid var(--builder-line);border-radius:8px;padding:9px 11px;margin:8px 0;background:var(--card-background-color,rgba(127,127,127,.04))}
+      .menu-toggles{margin-top:14px;padding-top:12px;border-top:2px solid var(--builder-line)}.menu-toggles h4{margin:0 0 6px}.toggle-config{margin:8px 0;padding:8px 10px;border:1px solid var(--builder-line);border-radius:8px;background:color-mix(in srgb,var(--primary-color,#03a9f4) 4%,transparent)}.toggle-actions{margin:8px 0;padding:8px;border-top:1px solid var(--builder-line);border-radius:6px;background:var(--card-background-color,rgba(127,127,127,.04))}.toggle-sync{display:flex;gap:6px;align-items:center}input[type=color]{height:34px;min-width:46px;padding:3px;border:1px solid var(--builder-line);border-radius:6px;background:transparent}
+      .menu-config>summary,.content-picker>summary,.toggle-config>summary{cursor:pointer;font-weight:600;min-height:28px;display:flex;align-items:center;gap:6px;list-style:none}.menu-config>summary::-webkit-details-marker,.content-picker>summary::-webkit-details-marker,.toggle-config>summary::-webkit-details-marker{display:none}.menu-config>summary::after,.content-picker>summary::after,.toggle-config>summary::after{content:"⌄";margin-left:auto;font-size:1.15em;transition:transform .15s ease}.menu-config[open]>summary::after,.content-picker[open]>summary::after,.toggle-config[open]>summary::after{transform:rotate(180deg)}
       .content-picker{margin:10px 0;padding:8px 10px;border-top:1px solid var(--builder-line)}
       .content-picker[open]{background:color-mix(in srgb,var(--primary-color,#03a9f4) 5%,transparent);border-radius:6px}
-      .menu-config .row label{flex:1 1 180px}.camera{display:flex;gap:10px;padding:8px 4px;align-items:center;flex-wrap:wrap;border-bottom:1px solid var(--builder-line)}
+      .menu-config .row label{flex:1 1 145px}.menu-config .row .order-field,.menu-config .row .placement-field{flex:0 1 118px}.menu-config .row .icon-field,.toggle-config .row .icon-field{flex:0 1 185px}.toggle-config .row .state-field{flex:0 1 310px}.toggle-config .row .colour-field{flex:0 1 74px}.camera{display:flex;gap:10px;padding:8px 4px;align-items:center;flex-wrap:wrap;border-bottom:1px solid var(--builder-line)}
       .camera:last-child{border-bottom:0}.camera strong{flex:1 1 180px}.camera label{display:flex;gap:6px;align-items:center}
       .camera-choice{border-bottom:1px solid var(--builder-line);padding:3px 0}.camera-choice:last-child{border-bottom:0}.camera-choice>.camera{border:0}
       .camera-appearance{margin:0 8px 10px;padding:8px 10px;border-top:1px solid var(--builder-line);background:color-mix(in srgb,var(--primary-color,#03a9f4) 4%,transparent);border-radius:6px}
       .camera-appearance>summary{cursor:pointer;font-weight:600;min-height:30px;display:flex;align-items:center}
       .camera-settings-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.camera-settings-row>label{display:flex;gap:6px;align-items:center;flex:1 1 150px}.camera-settings-row select{min-width:82px}
-      #echo-create-status,#managed-delete-status{display:block;margin:8px 0}
+      .custom-card-choice{display:flex;gap:10px;align-items:center;flex-wrap:wrap;border-bottom:1px solid var(--builder-line);padding:5px 4px}.custom-card-choice:last-child{border-bottom:0}.custom-card-choice>.camera{border:0;flex:1 1 260px}.card-layout-inline{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:5px 8px;background:color-mix(in srgb,var(--primary-color,#03a9f4) 4%,transparent);border-radius:6px}.card-layout-inline[aria-disabled=true]{opacity:.5;background:transparent}.card-layout-inline>label{display:flex;gap:6px;align-items:center}
+      .deployment-actions{align-items:center;min-height:42px}.deployment-actions .action-feedback{flex:1 1 300px;min-height:20px;margin:0;display:flex;align-items:center}.deployment-actions .action-feedback:empty{visibility:hidden}#managed-delete-status{display:block;margin:8px 0}
+      .save-explainer{padding:9px 10px;border-left:3px solid var(--primary-color,#03a9f4);background:color-mix(in srgb,var(--primary-color,#03a9f4) 7%,transparent);font-size:.92em;line-height:1.4}.menu-summary{opacity:.75;font-weight:400;font-size:.9em;margin-left:8px}@media(max-width:600px){.section-nav{margin:0 -4px}.section-nav a{font-size:.8em}.row>label{flex-basis:100%}}
     </style>
-      <div class="section"><h3>Saved dashboard setups (${savedProfiles.length})</h3><div class="hint">Save a setup here once. Selecting it loads its settings so you can create it for any Echo whenever you’re ready. These setups stay in this master dashboard.</div>
-        <div class="row"><label for="saved-profile">Saved setup</label><select id="saved-profile"><option value="">Current setup (not saved)</option>${savedProfiles.map((profile: any) => `<option value="${escapeHtml(profile.id)}" ${profile.id === selectedProfileId ? "selected" : ""}>${escapeHtml(profile.name)}</option>`).join("")}</select></div>
-        <div class="row"><label for="profile-name">Setup name</label><input id="profile-name" type="text" value="${escapeHtml(savedProfiles.find((profile: any) => profile.id === selectedProfileId)?.name || "")}" placeholder="e.g. Front cameras"></div>
-        <div class="row"><button id="remove-profile" type="button" ${selectedProfileId ? "" : "disabled"}>Remove saved setup</button></div>
-        <div class="hint">Use Save setup at the bottom when you want to add or update this reusable setup. It keeps this editor open.</div></div>
-      <div class="section"><h3>Kiosk Mode</h3><div class="hint">This setting belongs to this Echo dashboard only. It does not change Home Assistant globally or alter any dashboard you navigate to.</div><div class="row"><label for="kiosk-mode">Kiosk Mode <select id="kiosk-mode"><option value="enabled" ${selectedKioskMode === "enabled" ? "selected" : ""}>Enabled</option><option value="disabled" ${selectedKioskMode === "disabled" ? "selected" : ""}>Disabled</option><option value="inherit" ${selectedKioskMode === "inherit" ? "selected" : ""}>Inherit</option></select></label></div><div class="hint">Enabled and Disabled explicitly configure NemesisRE Kiosk Mode. Inherit leaves this dashboard without an override, so any existing Home Assistant or user-level rule can apply.</div></div>
-      <div class="section"><h3>Custom Card Holder</h3><div class="hint">A separate, genuine Home Assistant Lovelace dashboard for native Copy Card and Paste Card. It is builder-only: it never becomes an Echo menu or is exported to an Echo dashboard.</div><div class="row"><button id="open-card-holder" type="button">Open Custom Card Holder</button><button id="sync-card-holder" type="button" ${this.config.card_holder_url_path ? "" : "disabled"}>Sync card library</button></div><div id="card-holder-status" class="hint" aria-live="polite"></div>${cardLibrary.length ? `<ul>${cardLibrary.map((card) => `<li class="camera"><span>${escapeHtml(card.name)} — ${escapeHtml(card.card_type)} — ${escapeHtml(card.id)}${card.missing ? " (missing from holder)" : ""}</span><label>Display name <input type="text" data-card-library-name="${escapeHtml(card.id)}" value="${escapeHtml(card.name)}"></label></li>`).join("")}</ul><div class="hint">Names are builder metadata; they do not change the original Lovelace card. Missing cards retain their ID so references cannot redirect.</div>` : `<div class="hint">No cards have been discovered yet. Paste cards into the holder, save them normally, then Sync card library.</div>`}</div>
-      <div class="section"><h3>Menus (${menuProfiles.length})</h3><div class="hint">Each menu becomes a button on the Echo. Expand a menu, then choose cameras, lights, or temperature sensors. Each selected camera has its own size, order, overlay, and refresh setting.</div><div class="row"><label for="camera-refresh-default">Default camera image refresh</label><select id="camera-refresh-default">${[100, 250, 500, 1000, 2000, 3000, 5000, 10000, 15000].map((value) => `<option value="${value}" ${cameraRefreshInterval === value ? "selected" : ""}>${value === 100 ? "Every 100 ms (10 fps, maximum load)" : value === 250 ? "Every 250 ms (4 fps, high load)" : value === 500 ? "Every 500 ms (2 fps)" : `Every ${value / 1000} seconds`}</option>`).join("")}</select></div><div class="hint">Use the fast settings on one or two important cameras. 10 fps requests ten images per second for every visible camera, so start with a per-camera override rather than changing the default for the whole wall.</div>${menuEditors}<button id="add-menu" type="button">Add menu</button></div>
-      <div class="section"><h3>Apply setup to Echo Show</h3><div class="hint">Your setups are saved in this builder and previewed here. Applying one creates its Echo dashboard; the previous dashboard made here for that Echo is removed after the new one is attached. The builder stays available for editing and preview.</div>
+      <nav class="section-nav" aria-label="Builder sections"><button type="button" data-section-target="setup-library">Dash Library</button><button type="button" data-section-target="dashboard-content">Menus</button><button type="button" data-section-target="menu-controls">Menu-bar controls</button><button type="button" data-section-target="echo-deployment">Apply to Echo</button></nav>
+      ${builderPath !== wantedBuilderPath ? `<div class="section"><h3>Builder dashboard address</h3><div class="hint">Move this master builder to /${wantedBuilderPath}. Its saved setups and preview are kept; Echo dashboards are not changed.</div><button id="move-builder-path" type="button">Use builder address</button><div id="move-builder-status" class="hint" aria-live="polite"></div></div>` : ""}
+      <div class="section" id="setup-library"><h3>Dash Library (${savedProfiles.length})</h3><div class="hint">A Dash name is permanent. Select it to edit its own settings, add a blank Dash, or copy the selected Dash under a new name.</div>
+        <div class="row"><label for="saved-profile">Dash name</label><select id="saved-profile"><option value="">Select a Dash</option>${savedProfiles.map((profile: any) => `<option value="${escapeHtml(profile.id)}" ${profile.id === selectedProfileId ? "selected" : ""}>${escapeHtml(profile.name)}</option>`).join("")}</select></div>
+        <div class="row"><button id="add-profile" type="button">Add Dash</button><button id="copy-profile" type="button" ${selectedProfileId ? "" : "disabled"}>Copy Dash</button><button id="remove-profile" type="button" ${selectedProfileId ? "" : "disabled"}>Delete Dash</button></div><div id="dash-library-status" class="hint" aria-live="polite"></div></div>
+      <details class="section custom-card-holder"><summary>Custom Card Holder</summary><div class="holder-content"><div class="hint">A separate, genuine Home Assistant Lovelace dashboard for native Copy Card and Paste Card. It is builder-only: it never becomes an Echo menu or is exported to an Echo dashboard.</div><div class="row"><button id="open-card-holder" type="button">Open Custom Card Holder</button><button id="sync-card-holder" type="button" ${this.config.card_holder_url_path ? "" : "disabled"}>Sync card library</button></div><div id="card-holder-status" class="hint" aria-live="polite"></div>${cardLibrary.length ? `<ul>${cardLibrary.map((card) => `<li class="camera"><span>${escapeHtml(card.name)} — ${escapeHtml(card.card_type)} — ${escapeHtml(card.id)}${card.missing ? " (missing from holder)" : ""}</span><label>Display name <input type="text" data-card-library-name="${escapeHtml(card.id)}" value="${escapeHtml(card.name)}"></label></li>`).join("")}</ul><div class="hint">Names are builder metadata; they do not change the original Lovelace card. Missing cards retain their ID so references cannot redirect.</div>` : `<div class="hint">No cards have been discovered yet. Paste cards into the holder, save them normally, then Sync card library.</div>`}</div></details>
+      <div class="section" id="dashboard-content"><h3>Dashboard Content and Menus (${menuProfiles.length})</h3><div class="hint">Each row is one Echo button. Only one menu opens at a time; its selections remain intact when you collapse it.</div><div class="row"><label for="camera-refresh-default">Default camera image refresh</label><select id="camera-refresh-default">${[100, 250, 500, 1000, 2000, 3000, 5000, 10000, 15000].map((value) => `<option value="${value}" ${cameraRefreshInterval === value ? "selected" : ""}>${value === 100 ? "Every 100 ms (10 fps, maximum load)" : value === 250 ? "Every 250 ms (4 fps, high load)" : value === 500 ? "Every 500 ms (2 fps)" : `Every ${value / 1000} seconds`}</option>`).join("")}</select></div><div class="hint">Use a fast setting on one or two important cameras; individual camera overrides are under its collapsed appearance settings.</div><div class="menu-toggles"><h4>Detection styles (${detectionTypes.length})</h4><div class="hint">Types are discovered from matching entity names. Choose the matching entity for each feed in its camera appearance settings.</div>${detectionEditors}<button id="add-detection-type" type="button">Add detection type</button></div>${menuEditors}<button id="add-menu" type="button">Add menu</button></div>
+      <div class="section" id="menu-controls"><h3>Menu-Bar Controls</h3><div class="hint">These controls apply across the dashboard, rather than to one menu.</div><div class="menu-toggles"><h4>Status displays (${menuStatuses.length})</h4><div class="hint">Show live time or an entity value, such as a room temperature. A display can optionally be tapped to navigate or run a service.</div>${statusEditors}<button id="add-menu-status" type="button">Add status display</button></div><div class="menu-toggles"><h4>Menu-bar toggles (${menuToggles.length})</h4><div class="hint">Add stateful controls such as Meeting mode. Their colour and text follow the chosen helper or switch, and you can run separate actions when turning on and off.</div>${toggleEditors}<button id="add-menu-toggle" type="button">Add toggle</button></div></div>
+      <div class="section" id="echo-deployment"><h3>Echo Assignment and Deployment</h3><div class="save-explainer">Save Dash stores this named Dash in the library. Apply Dash to Echo saves it, creates or replaces the selected Echo dashboard, and attaches it to that device.</div><div class="hint">Your setups are saved in this builder and previewed here. Applying one creates its Echo dashboard; the previous dashboard made here for that Echo is removed after the new one is attached. The builder stays available for editing and preview.</div>
         <div class="row"><label for="echo-target">Echo Show</label><select id="echo-target" size="${Math.min(Math.max(targets.length + 1, 2), 5)}">${targets.length ? `<option value="">Select a device</option>${targets.map((target) => `<option value="${target.key}" ${target.key === selectedTarget ? "selected" : ""}>${target.label}</option>`).join("")}` : `<option value="">No TECHO5 devices discovered</option>`}</select></div>
         <div class="row"><label for="echo-mode">Presentation</label><select id="echo-mode"><option ${selectedMode === "Streamed" ? "selected" : ""}>Streamed</option><option ${selectedMode === "Drawn on the device" ? "selected" : ""}>Drawn on the device</option></select></div>
         <div class="row"><input id="echo-idle" type="checkbox" ${selectedIdle ? "checked" : ""}><label for="echo-idle">Dashboard when idle</label></div>
-        <div class="row"><button id="echo-load-attached" type="button" ${activeTarget ? "" : "disabled"}>Load current Echo setup into builder</button><button id="echo-create-dashboard" type="button" ${activeTarget ? "" : "disabled"}>Apply setup to Echo</button></div><div id="echo-create-status" class="hint" aria-live="polite"></div>
-        <div class="hint">Load current Echo setup is for recovering an already-applied setup into this builder. It does not change the Echo.</div>
+        <div class="row"><label for="kiosk-mode">Kiosk on this Echo</label><select id="kiosk-mode"><option value="enabled" ${selectedKioskMode === "enabled" ? "selected" : ""}>Enabled</option><option value="disabled" ${selectedKioskMode === "disabled" ? "selected" : ""}>Disabled</option><option value="inherit" ${selectedKioskMode === "inherit" ? "selected" : ""}>Inherit</option></select></div><div class="hint">This setting is used only when applying this Dash to an Echo. It never changes the builder dashboard.</div>
+        <div class="row deployment-actions"><button id="save-profile" type="button" ${selectedProfileId ? "" : "disabled"}>Save Dash</button><button id="echo-create-dashboard" type="button" ${activeTarget && selectedProfileId ? "" : "disabled"}>Apply Dash to Echo</button><div class="action-feedback hint" aria-live="polite"><span id="save-profile-status"></span><span id="echo-create-status"></span></div></div>
+        <div class="save-explainer">Save Dash updates the selected Dash in the library. Apply Dash to Echo saves that Dash, then creates or replaces the selected Echo dashboard.</div>
+        <details class="menu-toggles"><summary>Apply a standard Home Assistant dashboard</summary><div class="hint">This assigns an existing dashboard without changing it or adding a kiosk override.</div><div class="row"><label>Dashboard <select id="standard-dashboard">${this.standardDashboards.map((dashboard) => `<option value="${escapeHtml(dashboard.title)}">${escapeHtml(dashboard.title)}</option>`).join("")}</select></label><button id="echo-apply-standard" type="button" ${activeTarget ? "" : "disabled"}>Apply standard dashboard</button></div><div id="standard-dashboard-status" class="hint" aria-live="polite"></div></details>
         <div class="hint">Current assignment: ${activeTarget ? `${String(this._hass?.states[activeTarget.dashboard]?.state || "unknown")} / ${String(this._hass?.states[activeTarget.dashboardToShow]?.state || "unknown")} / idle ${String(this._hass?.states[activeTarget.idle]?.state || "unknown")}` : "Select a device to read its current settings."}</div>
       </div>
       <div class="section"><h3>Echo dashboards applied from this builder</h3><div class="hint">The list shows dashboards created by this builder. Applying a new setup replaces the previous builder dashboard for that same Echo; setups saved above are kept.</div>${managedDashboardList}<div id="managed-delete-status" class="hint" aria-live="polite"></div></div>
-      <div class="section"><h3>Save setup</h3><div class="hint">Saves this named reusable setup and keeps the editor open.</div><button id="save-profile" type="button">Save setup</button><div id="save-profile-status" class="hint" aria-live="polite"></div></div>`;
+      `;
+    root.querySelectorAll<HTMLDetailsElement>("[data-menu-card]").forEach((card) => card.addEventListener("toggle", () => {
+      const id = card.dataset.menuCard || "";
+      if (card.open) {
+        root.querySelectorAll<HTMLDetailsElement>("[data-menu-card]").forEach((other) => {
+          if (other !== card && other.open) other.open = false;
+          if (other !== card) EchoShowEditor.openMenuCards[other.dataset.menuCard || ""] = false;
+        });
+      }
+      EchoShowEditor.openMenuCards[id] = card.open;
+    }));
+    // Status displays use the same complete icon-and-text alignment control as
+    // menu buttons and toggles.  Add it beside their placement/order controls.
+    root.querySelectorAll<HTMLElement>("[data-status-card]").forEach((card) => {
+      const status = menuStatuses.find((item) => item.id === card.dataset.statusCard);
+      const row = card.querySelector("[data-status-placement]")?.closest(".row");
+      if (!row) return;
+      const alignment = status?.alignment === "center" || status?.alignment === "right" ? status.alignment : "left";
+      row.insertAdjacentHTML("beforeend", `<label>Content alignment <select data-status-alignment><option value="left" ${alignment === "left" ? "selected" : ""}>Left</option><option value="center" ${alignment === "center" ? "selected" : ""}>Centre</option><option value="right" ${alignment === "right" ? "selected" : ""}>Right</option></select></label>`);
+    });
+    root.querySelectorAll<HTMLSelectElement>("[data-menu-icon-placement], [data-toggle-icon-placement]").forEach((select) => {
+      const label = select.closest("label");
+      if (label?.firstChild?.nodeType === Node.TEXT_NODE) label.firstChild.textContent = "Content alignment ";
+    });
+    root.querySelectorAll<HTMLButtonElement>("[data-section-target]").forEach((button) => button.addEventListener("click", () => {
+      root.querySelector<HTMLElement>(`#${button.dataset.sectionTarget || ""}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }));
     root.querySelectorAll<HTMLButtonElement>("[data-delete-managed]").forEach((button) => button.addEventListener("click", async () => {
       const dashboard = this.managedDashboards.find((item) => item.id === button.dataset.deleteManaged);
       if (!dashboard || !window.confirm(`Remove the dashboard “${dashboard.title}” (${dashboard.url_path})? This does not remove the Echo device.`)) return;
@@ -517,6 +851,26 @@ class EchoShowEditor extends HTMLElement {
         if (message) message.textContent = `Could not remove “${dashboard.title}”: ${String(error)}`;
       }
     }));
+    root.querySelector<HTMLButtonElement>("#move-builder-path")?.addEventListener("click", async (event) => {
+      const button = event.currentTarget as HTMLButtonElement;
+      const status = root.querySelector<HTMLElement>("#move-builder-status");
+      button.disabled = true;
+      if (status) status.textContent = "Moving the builder dashboard…";
+      try {
+        const dashboards = await this.callWS({ type: "lovelace/dashboards/list" });
+        if (!Array.isArray(dashboards)) throw new Error("Home Assistant did not return the dashboard list.");
+        if (dashboards.some((dashboard: any) => String(dashboard.url_path) === wantedBuilderPath)) throw new Error(`/${wantedBuilderPath} is already in use.`);
+        const source = await this.callWS({ type: "lovelace/config", url_path: builderPath });
+        const created = await this.callWS({ type: "lovelace/dashboards/create", url_path: wantedBuilderPath, title: "Echo Show Dash HTML Builder", show_in_sidebar: true, require_admin: false });
+        await this.callWS({ type: "lovelace/config/save", url_path: wantedBuilderPath, config: source });
+        const old = dashboards.find((dashboard: any) => String(dashboard.url_path) === builderPath);
+        if (old?.id) await this.callWS({ type: "lovelace/dashboards/delete", dashboard_id: old.id });
+        window.location.assign(`/${wantedBuilderPath}/home`);
+      } catch (error) {
+        if (status) status.textContent = `Could not move the builder address: ${String(error)}`;
+        button.disabled = false;
+      }
+    });
     const readMenuProfiles = (): EchoMenuConfig[] => Array.from(root.querySelectorAll<HTMLElement>("[data-menu-card]")).map((card, index) => {
       const id = card.dataset.menuCard || `menu-${index + 1}`;
       const existing = menuProfiles.find((menu) => menu.id === id);
@@ -531,7 +885,8 @@ class EchoShowEditor extends HTMLElement {
       return {
         id,
         label: card.querySelector<HTMLInputElement>("[data-menu-label]")?.value.trim() || `Menu ${index + 1}`,
-        icon: card.querySelector<HTMLInputElement>("[data-menu-icon]")?.value.trim() || "mdi:view-dashboard",
+        icon: card.querySelector<HTMLInputElement>("[data-menu-icon]")?.value.trim() || "",
+        icon_placement: card.querySelector<HTMLSelectElement>("[data-menu-icon-placement]")?.value === "center" ? "center" : card.querySelector<HTMLSelectElement>("[data-menu-icon-placement]")?.value === "right" ? "right" : "left",
         cameras: readSelection("[data-menu-camera]", existing?.cameras),
         lights: readSelection("[data-menu-light]", existing?.lights),
         temperatures: readSelection("[data-menu-temperature]", existing?.temperatures),
@@ -541,6 +896,7 @@ class EchoShowEditor extends HTMLElement {
           : card.querySelector<HTMLSelectElement>("[data-menu-destination]")?.value || "",
         source: card.querySelector<HTMLSelectElement>("[data-menu-source]")?.value === "lovelace_card" ? "lovelace_card" : "menu",
         lovelace_card_ids: Array.from(card.querySelectorAll<HTMLInputElement>("[data-menu-lovelace-card]:checked"), (input) => input.value),
+        lovelace_card_layouts: existing?.lovelace_card_layouts || {},
       };
     });
     const rememberOpenPickers = () => {
@@ -551,46 +907,85 @@ class EchoShowEditor extends HTMLElement {
     };
     root.querySelector<HTMLSelectElement>("#saved-profile")?.addEventListener("change", (event) => {
       this.selectedProfileId = (event.target as HTMLSelectElement).value;
-      const profile: any = savedProfiles.find((item) => item.id === this.selectedProfileId);
+      const profile = savedProfiles.find((item) => item.id === this.selectedProfileId);
       if (profile) {
-        this.emit({ menus: profile.menus, camera_order: profile.camera_order || [], camera_overlays: profile.camera_overlays || {}, camera_spans: profile.camera_spans || {}, camera_refresh_interval: profile.camera_refresh_interval || 3000, camera_refresh_intervals: profile.camera_refresh_intervals || {}, kiosk_mode: kioskModeSetting(profile.kiosk_mode, "enabled"), active_profile_id: profile.id }, true);
+        this.emit({ ...profileSettings(profile), active_profile_id: profile.id }, true);
       } else {
         this.emit({ active_profile_id: "" }, true);
       }
     });
+    const dashName = (prompt: string): string | undefined => {
+      const value = window.prompt(prompt, "")?.trim() || "";
+      if (!value) return undefined;
+      if (savedProfiles.some((profile) => profile.name.localeCompare(value, undefined, { sensitivity: "accent" }) === 0)) {
+        const status = root.querySelector<HTMLElement>("#dash-library-status");
+        if (status) status.textContent = `A Dash named “${value}” already exists. Dash names are permanent and must be unique.`;
+        return undefined;
+      }
+      return value;
+    };
+    root.querySelector<HTMLButtonElement>("#add-profile")?.addEventListener("click", () => {
+      const name = dashName("New Dash name");
+      if (!name) return;
+      const id = `dash-${Date.now()}`;
+      const profile: EchoSavedDashboardProfile = { id, name, menus: [], settings: { menus: [], menu_toggles: [], menu_statuses: [], camera_order: [], camera_overlays: {}, camera_spans: {}, camera_refresh_interval: 3000, camera_refresh_intervals: {}, camera_person_entities: {}, person_detection: { animation: "soft-pulse", color: "#ffc107", show_badge: false, badge_text: "Person" }, detection_types: [{ id: "person", label: "Person", match: "person", animation: "soft-pulse", color: "#ffc107", show_badge: false, badge_text: "Person" }, { id: "dog", label: "Dog", match: "dog", animation: "soft-pulse", color: "#7e57c2", show_badge: true, badge_text: "Dog" }], camera_detections: {}, kiosk_mode: "inherit", echo_target: "", echo_mode: "Streamed", echo_dashboard_when_idle: false } };
+      this.selectedProfileId = id;
+      this.emit({ ...profileSettings(profile), saved_profiles: [...savedProfiles, profile], active_profile_id: id }, true);
+    });
+    root.querySelector<HTMLButtonElement>("#copy-profile")?.addEventListener("click", () => {
+      const source = savedProfiles.find((profile) => profile.id === selectedProfileId);
+      if (!source) return;
+      const name = dashName(`Copy “${source.name}” as`);
+      if (!name) return;
+      const id = `dash-${Date.now()}`;
+      const copied: EchoSavedDashboardProfile = { ...JSON.parse(JSON.stringify(source)), id, name };
+      this.selectedProfileId = id;
+      this.emit({ ...profileSettings(copied), saved_profiles: [...savedProfiles, copied], active_profile_id: id }, true);
+    });
     root.querySelector<HTMLButtonElement>("#remove-profile")?.addEventListener("click", () => {
-      const profile: any = savedProfiles.find((item: any) => item.id === selectedProfileId);
-      if (!profile || !window.confirm(`Remove the saved setup “${profile.name}” from this master dashboard? Existing Echo dashboards will not be changed.`)) return;
+      const profile = savedProfiles.find((item) => item.id === selectedProfileId);
+      if (!profile || !window.confirm(`Delete Dash “${profile.name}” from this library? Existing Echo dashboards will not be changed.`)) return;
       const next = savedProfiles.filter((item: any) => item.id !== profile.id);
       this.selectedProfileId = "";
       this.emit({ saved_profiles: next, active_profile_id: "" }, true);
     });
     root.querySelector<HTMLButtonElement>("#save-profile")?.addEventListener("click", () => {
-      const name = root.querySelector<HTMLInputElement>("#profile-name")?.value.trim() || "";
+      const previous = savedProfiles.find((profile) => profile.id === selectedProfileId);
       const status = root.querySelector<HTMLElement>("#save-profile-status");
-      if (!name) { if (status) status.textContent = "Enter a setup name first."; return; }
-      const id = selectedProfileId || `setup-${Date.now()}`;
+      if (!previous) { if (status) status.textContent = "Select or add a Dash first."; return; }
+      const current = this.getCurrentConfig();
       const profile: EchoSavedDashboardProfile = {
-        id,
-        name,
-        menus: readMenuProfiles(),
-        camera_order: [...cameraOrder],
-        camera_overlays: { ...(this.config.camera_overlays || {}) },
-        camera_spans: { ...(this.config.camera_spans || {}) },
-        camera_refresh_interval: cameraRefreshInterval,
-        camera_refresh_intervals: { ...(this.config.camera_refresh_intervals || {}) },
-        kiosk_mode: kioskModeSetting(root.querySelector<HTMLSelectElement>("#kiosk-mode")?.value, "enabled"),
+        ...previous,
+        menus: current.menus || [],
+        settings: dashSettings(current),
       };
-      this.selectedProfileId = id;
-      this.emit({ saved_profiles: [...savedProfiles.filter((item) => item.id !== id), profile], active_profile_id: id }, true);
+      const next = { ...current, saved_profiles: [...savedProfiles.filter((item) => item.id !== profile.id), profile], active_profile_id: profile.id };
+      // Save Dash is the durable, intentional save point for the builder
+      // library.  It must not depend on Home Assistant's generic editor footer.
+      // Home Assistant sends this stored configuration straight back through
+      // setConfig(). It is already on screen, so retain the current DOM for
+      // this ordinary save instead of rebuilding the entire editor.
+      this.preserveEditorOnNextConfig = true;
+      void this.persistBuilderConfig(next).then(() => {
+        this.config = next;
+        this.selectedProfileId = profile.id;
+        this.hasUnsavedChanges = false;
+        // Saving persists the already-visible Dash.  Rebuilding the whole
+        // editor here made every section re-measure and visibly jump.
+        // Structural actions (add/copy/delete) still deliberately render.
+        if (status) status.textContent = `Saved Dash “${profile.name}”.`;
+      }).catch((error) => {
+        this.preserveEditorOnNextConfig = false;
+        if (status) status.textContent = `Could not save this Dash: ${String(error)}`;
+      });
     });
     // Text fields commit on change (blur/Enter), not every keystroke.  Emitting
     // config-changed while typing makes Home Assistant recreate this editor and
     // returns its scroll position to the top.
-    root.querySelectorAll<HTMLInputElement>("[data-menu-camera], [data-menu-light], [data-menu-temperature], [data-menu-lovelace-card], [data-overlay-show]").forEach((input) => input.addEventListener("change", () => this.emitCurrentConfig()));
-    root.querySelectorAll<HTMLSelectElement>("[data-menu-order], [data-menu-action], [data-menu-destination], [data-menu-source], [data-order], [data-overlay-h], [data-overlay-v], [data-span], [data-camera-refresh], #camera-refresh-default, #kiosk-mode").forEach((input) => input.addEventListener("change", () => this.emitCurrentConfig()));
-    const updateMenus = (rerender = false) => {
-      this.emit({ menus: readMenuProfiles() }, rerender);
+    root.querySelectorAll<HTMLInputElement>("[data-overlay-show]").forEach((input) => input.addEventListener("change", () => this.emitCurrentConfig()));
+    root.querySelectorAll<HTMLSelectElement>("[data-menu-order], [data-menu-action], [data-menu-destination], [data-menu-source], [data-menu-icon-placement], [data-menu-content-overflow], [data-order], [data-overlay-h], [data-overlay-v], [data-span], [data-camera-refresh], #camera-refresh-default, #kiosk-mode").forEach((input) => input.addEventListener("change", () => this.emitCurrentConfig()));
+    const updateMenus = (rerender = false, persist = true) => {
+      if (persist) this.emit({ menus: readMenuProfiles() }, rerender);
       if (!rerender) {
         root.querySelectorAll<HTMLElement>("[data-menu-card]").forEach((card, index) => {
           const menu = readMenuProfiles()[index];
@@ -611,18 +1006,148 @@ class EchoShowEditor extends HTMLElement {
         });
       }
     };
-    root.querySelectorAll<HTMLInputElement>("[data-menu-label], [data-menu-icon], [data-menu-custom-destination]").forEach((input) => input.addEventListener("change", () => {
+    root.querySelectorAll<HTMLInputElement>("[data-menu-label], [data-menu-icon], [data-menu-icon-entity], [data-menu-custom-destination]").forEach((input) => input.addEventListener("change", () => {
       const card = input.closest<HTMLElement>("[data-menu-card]");
       const index = Array.from(root.querySelectorAll("[data-menu-card]")).indexOf(card!);
       const label = card?.querySelector<HTMLInputElement>("[data-menu-label]")?.value.trim() || `Menu ${index + 1}`;
       if (card) card.querySelector("summary")!.textContent = `Menu ${index + 1}: ${label}`;
       updateMenus();
     }));
+    // The icon search is a floating panel.  It must never trap the editor:
+    // Escape or clicking anywhere outside it closes it, even on narrow screens.
+    root.addEventListener("keydown", (event) => {
+      if ((event as KeyboardEvent).key === "Escape") root.querySelectorAll<HTMLDetailsElement>(".icon-picker[open]").forEach((picker) => picker.removeAttribute("open"));
+    });
+    root.addEventListener("click", (event) => {
+      const target = event.target as HTMLElement;
+      if (!target.closest(".icon-picker")) root.querySelectorAll<HTMLDetailsElement>(".icon-picker[open]").forEach((picker) => picker.removeAttribute("open"));
+    });
+    const showMenuIcon = (card: HTMLElement, icon: string) => {
+      const preview = card.querySelector<HTMLElement>("[data-icon-preview]");
+      if (preview) preview.innerHTML = icon ? `<ha-icon icon="${escapeHtml(icon)}"></ha-icon>` : "No icon";
+    };
+    // Keep the visual preview responsive without emitting changes while a user
+    // types.  This avoids the editor jumping back to the top of the page.
+    root.querySelectorAll<HTMLInputElement>("[data-menu-icon]").forEach((input) => input.addEventListener("input", () => {
+      const card = input.closest<HTMLElement>("[data-menu-card]");
+      if (card) showMenuIcon(card, input.value.trim());
+    }));
+    const bindIconChoice = (button: HTMLButtonElement) => button.addEventListener("click", () => {
+      const card = button.closest<HTMLElement>("[data-menu-card]");
+      const input = card?.querySelector<HTMLInputElement>("[data-menu-icon]");
+      if (!card || !input) return;
+      input.value = button.dataset.menuIconChoice || "";
+      showMenuIcon(card, input.value);
+      card.querySelector<HTMLDetailsElement>(".icon-picker")?.removeAttribute("open");
+      updateMenus();
+    });
+    root.querySelectorAll<HTMLButtonElement>("[data-menu-icon-choice]").forEach(bindIconChoice);
+    root.querySelectorAll<HTMLInputElement>("[data-icon-search]").forEach((input) => input.addEventListener("input", async () => {
+      const picker = input.closest<HTMLElement>(".icon-picker");
+      const options = picker?.querySelector<HTMLElement>(".icon-options");
+      const status = picker?.querySelector<HTMLElement>(".icon-search-status");
+      const query = input.value.trim().toLowerCase();
+      if (!options || !status) return;
+      if (!query) {
+        options.innerHTML = MENU_ICON_CHOICES.map(([value, label]) => iconChoiceMarkup(value, label)).join("");
+        status.textContent = "";
+        options.querySelectorAll<HTMLButtonElement>("[data-menu-icon-choice]").forEach(bindIconChoice);
+        return;
+      }
+      status.textContent = "Searching the Material Design icon library…";
+      const names = await this.loadMdiIconNames();
+      // Ignore an older request after the user has continued typing.
+      if (input.value.trim().toLowerCase() !== query) return;
+      const matches = names.filter((name) => name.includes(query)).slice(0, 48);
+      options.innerHTML = matches.map((name) => iconChoiceMarkup(name, name.slice(4))).join("");
+      status.textContent = matches.length ? `${matches.length} matching icons shown.` : names.length ? "No matching icons found." : "The full icon library could not be loaded; common choices remain available.";
+      options.querySelectorAll<HTMLButtonElement>("[data-menu-icon-choice]").forEach(bindIconChoice);
+    }));
+    const showToggleIcon = (card: HTMLElement, icon: string) => {
+      const preview = card.querySelector<HTMLElement>("[data-toggle-icon-preview]");
+      if (preview) preview.innerHTML = icon ? `<ha-icon icon="${escapeHtml(icon)}"></ha-icon>` : "No icon";
+    };
+    root.querySelectorAll<HTMLInputElement>("[data-toggle-icon]").forEach((input) => input.addEventListener("input", () => {
+      const card = input.closest<HTMLElement>("[data-toggle-card]");
+      if (card) showToggleIcon(card, input.value.trim());
+    }));
+    const bindToggleIconChoice = (button: HTMLButtonElement) => button.addEventListener("click", () => {
+      const card = button.closest<HTMLElement>("[data-toggle-card]");
+      const input = card?.querySelector<HTMLInputElement>("[data-toggle-icon]");
+      if (!card || !input) return;
+      input.value = button.dataset.toggleIconChoice || "";
+      showToggleIcon(card, input.value);
+      card.querySelector<HTMLDetailsElement>(".icon-picker")?.removeAttribute("open");
+      this.emit({ menu_toggles: readMenuToggles() }, false);
+    });
+    root.querySelectorAll<HTMLButtonElement>("[data-toggle-icon-choice]").forEach(bindToggleIconChoice);
+    root.querySelectorAll<HTMLInputElement>("[data-toggle-icon-search]").forEach((input) => input.addEventListener("input", async () => {
+      const picker = input.closest<HTMLElement>(".icon-picker");
+      const options = picker?.querySelector<HTMLElement>(".icon-options");
+      const status = picker?.querySelector<HTMLElement>(".icon-search-status");
+      const query = input.value.trim().toLowerCase();
+      if (!options || !status) return;
+      if (!query) {
+        options.innerHTML = MENU_ICON_CHOICES.map(([value, label]) => toggleIconChoiceMarkup(value, label)).join("");
+        status.textContent = "";
+        options.querySelectorAll<HTMLButtonElement>("[data-toggle-icon-choice]").forEach(bindToggleIconChoice);
+        return;
+      }
+      status.textContent = "Searching the Material Design icon library…";
+      const names = await this.loadMdiIconNames();
+      if (input.value.trim().toLowerCase() !== query) return;
+      const matches = names.filter((name) => name.includes(query)).slice(0, 48);
+      options.innerHTML = matches.map((name) => toggleIconChoiceMarkup(name, name.slice(4))).join("");
+      status.textContent = matches.length ? `${matches.length} matching icons shown.` : names.length ? "No matching icons found." : "The full icon library could not be loaded; common choices remain available.";
+      options.querySelectorAll<HTMLButtonElement>("[data-toggle-icon-choice]").forEach(bindToggleIconChoice);
+    }));
     root.querySelectorAll<HTMLSelectElement>("[data-menu-action]").forEach((select) => select.addEventListener("change", () => {
       this.emit({ menus: readMenuProfiles() }, true);
     }));
     root.querySelectorAll<HTMLSelectElement>("[data-menu-source]").forEach((select) => select.addEventListener("change", () => {
       this.emit({ menus: readMenuProfiles() }, true);
+    }));
+    root.querySelectorAll<HTMLInputElement>("[data-menu-lovelace-card]").forEach((input) => input.addEventListener("change", () => {
+      const card = input.closest<HTMLElement>("[data-menu-card]");
+      const id = card?.dataset.menuCard || "";
+      const current = readMenuProfiles();
+      const menu = current.find((item) => item.id === id);
+      if (!menu) return;
+      const selected = menu.lovelace_card_ids || [];
+      menu.lovelace_card_layouts = cardLayoutsFor(selected, (menuProfiles.find((item) => item.id === id)?.lovelace_card_layouts || {}));
+      // Selection changes must not make Home Assistant recreate the editor.
+      // Keep this menu and its picker open, just as camera/light selection does.
+      this.config = { ...this.config, menus: current };
+      this.hasUnsavedChanges = true;
+      this.render();
+    }));
+    root.querySelectorAll<HTMLSelectElement>("[data-card-order], [data-card-width], [data-card-height]").forEach((select) => select.addEventListener("change", () => {
+      const menuCard = select.closest<HTMLElement>("[data-menu-card]");
+      const menuId = menuCard?.dataset.menuCard || "";
+      const cardId = select.dataset.cardOrder || select.dataset.cardWidth || select.dataset.cardHeight || "";
+      const current = readMenuProfiles();
+      const menu = current.find((item) => item.id === menuId);
+      if (!menu || !cardId) return;
+      const ids = menu.lovelace_card_ids || [];
+      const layouts = cardLayoutsFor(ids, menuProfiles.find((item) => item.id === menuId)?.lovelace_card_layouts);
+      if (select.dataset.cardOrder) {
+        const reordered = moveCardToPosition([...ids].sort((a, b) => layouts[a].order - layouts[b].order), cardId, Number(select.value) - 1);
+        menu.lovelace_card_ids = reordered;
+        // A move is positional: rebuild every ordinal from the new sequence.
+        // Keeping the prior values would make the visual list snap back.
+        menu.lovelace_card_layouts = reordered.reduce((next, id, index) => {
+          next[id] = { ...layouts[id], order: index + 1 };
+          return next;
+        }, {} as Record<string, { order: number; width: number; height: number }>);
+      } else {
+        layouts[cardId] = { ...layouts[cardId], [select.dataset.cardWidth ? "width" : "height"]: Number(select.value) };
+        menu.lovelace_card_layouts = layouts;
+      }
+      // Layout controls are in the selected card's row; preserve the current
+      // editor view while recalculating the self-healing order.
+      this.config = { ...this.config, menus: current };
+      this.hasUnsavedChanges = true;
+      this.render();
     }));
     root.querySelectorAll<HTMLSelectElement>("[data-menu-destination]").forEach((select) => select.addEventListener("change", () => {
       this.emit({ menus: readMenuProfiles() }, true);
@@ -679,7 +1204,13 @@ class EchoShowEditor extends HTMLElement {
     });
     root.querySelectorAll<HTMLInputElement>("[data-menu-camera], [data-menu-light], [data-menu-temperature]").forEach((input) => input.addEventListener("change", () => {
       rememberOpenPickers();
-      updateMenus();
+      // Rebuild locally so a newly selected camera immediately gains its
+      // name/overlay, size and refresh controls. Do not emit a Home Assistant
+      // config change here: that recreates the parent editor and collapses the
+      // picker the user is working in. The remembered picker state restores it.
+      this.config = { ...this.config, menus: readMenuProfiles() };
+      this.hasUnsavedChanges = true;
+      this.render();
     }));
     root.querySelectorAll<HTMLButtonElement>("[data-remove-menu]").forEach((button) => button.addEventListener("click", () => {
       const next = readMenuProfiles().filter((menu) => menu.id !== button.closest<HTMLElement>("[data-menu-card]")?.dataset.menuCard);
@@ -692,6 +1223,44 @@ class EchoShowEditor extends HTMLElement {
       next.push({ id: `menu-${index}`, label: `Menu ${index}`, icon: "mdi:view-dashboard", cameras: [], lights: [], temperatures: [], action: "view", destination: "" });
       this.emit({ menus: next }, true);
     });
+    const readMenuToggles = () => normaliseMenuToggles(this.getCurrentConfig().menu_toggles);
+    const readMenuStatuses = () => this.getCurrentConfig().menu_statuses || [];
+    root.querySelector<HTMLButtonElement>("#add-menu-status")?.addEventListener("click", () => {
+      const next = readMenuStatuses(); const temperature = temperatures[0];
+      if (!next.length) next.push({ id: "status-time", label: "", icon: "mdi:clock-outline", type: "time", placement: "left", order: 1, action: "none" });
+      else next.push({ id: `status-${next.length + 1}`, label: temperature ? String(temperature.attributes?.friendly_name || "Temperature") : "Temperature", icon: "mdi:thermometer", type: "entity", entity: temperature?.entity_id || "", placement: "right", order: next.length + 1, action: "none" });
+      this.emit({ menu_statuses: next }, true);
+    });
+    root.querySelectorAll<HTMLButtonElement>("[data-remove-status]").forEach((button) => button.addEventListener("click", () => this.emit({ menu_statuses: readMenuStatuses().filter((status: any) => status.id !== button.dataset.removeStatus) }, true)));
+    root.querySelectorAll<HTMLInputElement>("[data-status-label], [data-status-icon], [data-status-icon-entity], [data-status-destination]").forEach((input) => input.addEventListener("change", () => this.emit({ menu_statuses: readMenuStatuses() }, false)));
+    root.querySelectorAll<HTMLInputElement>("[data-status-entity-search]").forEach((input) => input.addEventListener("input", () => { const card=input.closest<HTMLElement>("[data-status-card]"); const select=card?.querySelector<HTMLSelectElement>("[data-status-entity]"); const query=input.value.trim().toLowerCase(); if(select) Array.from(select.options).forEach((option,index)=>{ option.hidden=index>0 && query.length>0 && !option.text.toLowerCase().includes(query); }); }));
+    root.querySelectorAll<HTMLSelectElement>("[data-status-type], [data-status-time-format], [data-status-entity], [data-status-placement], [data-status-alignment], [data-status-order], [data-status-action]").forEach((input) => input.addEventListener("change", () => this.emit({ menu_statuses: readMenuStatuses() }, input.matches("[data-status-type]"))));
+    root.querySelector<HTMLButtonElement>("#add-menu-toggle")?.addEventListener("click", () => {
+      const next = readMenuToggles();
+      let index = next.length + 1;
+      while (next.some((toggle) => toggle.id === `toggle-${index}`)) index += 1;
+      const leftOrder = next.filter((toggle) => toggle.placement !== "right").length + 1;
+      next.push({ id: `toggle-${index}`, label: `Toggle ${index}`, on_label: "", off_label: "", icon: "mdi:toggle-switch", state_entity: "", placement: "left", order: leftOrder, active_color: "#2e9d5b", type: "script", on_target: "", off_target: "", subtitle: "", confirm: false, off_long_press: false, hide_unavailable: false, sync_state: true });
+      this.emit({ menu_toggles: next }, true);
+    });
+    root.querySelectorAll<HTMLButtonElement>("[data-remove-toggle]").forEach((button) => button.addEventListener("click", () => {
+      this.emit({ menu_toggles: readMenuToggles().filter((toggle) => toggle.id !== button.dataset.removeToggle) }, true);
+    }));
+    root.querySelectorAll<HTMLInputElement>("[data-toggle-label], [data-toggle-on-label], [data-toggle-off-label], [data-toggle-icon], [data-toggle-icon-entity], [data-toggle-color], [data-toggle-subtitle], [data-toggle-sync], [data-toggle-confirm], [data-toggle-long-press], [data-toggle-hide-unavailable]").forEach((input) => input.addEventListener("change", () => this.emit({ menu_toggles: readMenuToggles() }, false)));
+    root.querySelectorAll<HTMLSelectElement>("[data-toggle-state], [data-toggle-icon-placement], [data-toggle-on-target], [data-toggle-off-target]").forEach((input) => input.addEventListener("change", () => this.emit({ menu_toggles: readMenuToggles() }, false)));
+    root.querySelectorAll<HTMLSelectElement>("[data-toggle-type]").forEach((input) => input.addEventListener("change", () => this.emit({ menu_toggles: readMenuToggles() }, true)));
+    root.querySelectorAll<HTMLSelectElement>("[data-toggle-placement]").forEach((select) => select.addEventListener("change", () => {
+      const id = select.closest<HTMLElement>("[data-toggle-card]")?.dataset.toggleCard || "";
+      const placement = select.value === "right" ? "right" : "left";
+      const next = readMenuToggles().map((toggle) => toggle.id === id ? { ...toggle, placement } : toggle);
+      this.emit({ menu_toggles: normaliseMenuToggles(next) }, true);
+    }));
+    root.querySelectorAll<HTMLSelectElement>("[data-toggle-order]").forEach((select) => select.addEventListener("change", () => {
+      const card = select.closest<HTMLElement>("[data-toggle-card]");
+      const id = card?.dataset.toggleCard || "";
+      const placement = card?.querySelector<HTMLSelectElement>("[data-toggle-placement]")?.value === "right" ? "right" : "left";
+      this.emit({ menu_toggles: moveToggleToPosition(readMenuToggles(), id, placement, Number(select.value) - 1) }, true);
+    }));
     const updateOverlay = (entity: string) => {
       const next = { ...(this.config.camera_overlays || {}) };
       next[entity] = { show: root.querySelector<HTMLInputElement>(`[data-overlay-show="${entity}"]`)?.checked !== false, horizontal: root.querySelector<HTMLSelectElement>(`[data-overlay-h="${entity}"]`)?.value || "left", vertical: root.querySelector<HTMLSelectElement>(`[data-overlay-v="${entity}"]`)?.value || "bottom" };
@@ -714,6 +1283,17 @@ class EchoShowEditor extends HTMLElement {
     root.querySelector<HTMLSelectElement>("#camera-refresh-default")?.addEventListener("change", (event) => {
         this.emit({ camera_refresh_interval: Math.max(100, Number((event.target as HTMLSelectElement).value)) }, false);
     });
+    const updateDetections = () => { const current = this.getCurrentConfig(); this.emit({ detection_types: current.detection_types, camera_detections: current.camera_detections }, false); };
+    root.querySelectorAll<HTMLInputElement | HTMLSelectElement>("[data-detection-label], [data-detection-match], [data-detection-animation], [data-detection-color], [data-detection-badge], [data-detection-badge-text], [data-camera-detection]").forEach((input) => input.addEventListener("change", updateDetections));
+    root.querySelector<HTMLButtonElement>("#add-detection-type")?.addEventListener("click", () => {
+      const next = this.getCurrentConfig().detection_types || [];
+      let index = next.length + 1; while (next.some((type: any) => type.id === `detection-${index}`)) index += 1;
+      this.emit({ detection_types: [...next, { id: `detection-${index}`, label: `Detection ${index}`, match: "", animation: "soft-pulse", color: "#03a9f4", show_badge: true, badge_text: `Detection ${index}` }] }, true);
+    });
+    root.querySelectorAll<HTMLButtonElement>("[data-remove-detection-type]").forEach((button) => button.addEventListener("click", () => {
+      const id = button.dataset.removeDetectionType || "";
+      this.emit({ detection_types: (this.getCurrentConfig().detection_types || []).filter((type: any) => type.id !== id) }, true);
+    }));
     root.querySelectorAll<HTMLSelectElement>("[data-order]").forEach((input) => input.addEventListener("change", () => {
       const entity = input.dataset.order || "";
       this.emit({ camera_order: moveCameraToPosition(cameraOrder, entity, Number(input.value) - 1) });
@@ -727,71 +1307,62 @@ class EchoShowEditor extends HTMLElement {
         echo_dashboard_when_idle: Boolean(target && this._hass?.states[target.idle]?.state === "on"),
       });
     });
-    root.querySelector<HTMLButtonElement>("#echo-load-attached")?.addEventListener("click", async (event) => {
+    root.querySelector<HTMLButtonElement>("#echo-apply-standard")?.addEventListener("click", async (event) => {
       const button = event.currentTarget as HTMLButtonElement;
-      let status = root.querySelector<HTMLElement>("#echo-create-status");
+      const status = root.querySelector<HTMLElement>("#standard-dashboard-status");
       const target = targets.find((item) => item.key === (root.querySelector<HTMLSelectElement>("#echo-target")?.value || ""));
-      const managed = target && this.managedDashboards.find((dashboard) => dashboard.target === target.key);
-      if (!target || !managed) { if (status) status.textContent = "There is no builder dashboard currently applied to that Echo Show."; return; }
+      const title = root.querySelector<HTMLSelectElement>("#standard-dashboard")?.value || "";
+      if (!target || !title) { if (status) status.textContent = "Select an Echo Show and a dashboard first."; return; }
       button.disabled = true;
-      if (status) status.textContent = "Loading the current Echo setup into this builder…";
+      if (status) status.textContent = "Assigning the standard dashboard…";
       try {
-        const applied = await this.callWS({ type: "lovelace/config", url_path: managed.url_path });
-        const strategy = applied?.strategy;
-        if (strategy?.type !== "custom:echo-show" || strategy.echo_managed !== true) throw new Error("The selected dashboard is not a dashboard created by this builder.");
-        const restored = {
-          ...this.config,
-          menus: strategy.menus || [],
-          included_cameras: strategy.included_cameras,
-          included_lights: strategy.included_lights,
-          included_temperatures: strategy.included_temperatures,
-          menu: strategy.menu,
-          camera_overlays: strategy.camera_overlays || {},
-          camera_spans: strategy.camera_spans || {},
-          camera_order: strategy.camera_order || [],
-          camera_refresh_interval: strategy.camera_refresh_interval || 3000,
-          camera_refresh_intervals: strategy.camera_refresh_intervals || {},
-          echo_target: target.key,
-          echo_mode: strategy.echo_mode || "Streamed",
-          echo_dashboard_when_idle: Boolean(strategy.echo_dashboard_when_idle),
-          echo_managed: false,
-        };
-        await this.persistBuilderConfig(restored);
-        this.config = restored;
-        this.render();
-        status = this.shadowRoot?.querySelector<HTMLElement>("#echo-create-status") || null;
-        if (status) status.textContent = `Loaded and saved the current ${target.label} setup in this builder. The Echo was not changed.`;
+        const dashboard = this.standardDashboards.find((item) => item.title === title);
+        if (!dashboard?.url_path) throw new Error(`The selected dashboard “${title}” no longer exists.`);
+        const mode = root.querySelector<HTMLSelectElement>("#echo-mode")?.value || "Streamed";
+        const idle = root.querySelector<HTMLInputElement>("#echo-idle")?.checked || false;
+        await this._hass?.callService?.("select", "select_option", { entity_id: target.dashboard, option: mode });
+        await this._hass?.callService?.("switch", idle ? "turn_on" : "turn_off", { entity_id: target.idle });
+        // Show 5 exposes its Dashboard-to-show selector as “Automatic”, so a
+        // title cannot be selected there. TECHO5's path command works for both
+        // standard dashboards and builder-created ones.
+        await this._hass?.callService?.("esphome", `${target.key}_dashboard_path`, { path: `/${dashboard.url_path}` });
+        await this._hass?.callService?.("esphome", `${target.key}_dashboard_show`, {});
+        if (status) status.textContent = `Applied standard dashboard “${title}” to ${target.label}.`;
       } catch (error) {
-        if (status) status.textContent = `Could not load the current Echo setup: ${String(error)}`;
-      } finally {
-        const currentButton = this.shadowRoot?.querySelector<HTMLButtonElement>("#echo-load-attached");
-        if (currentButton) currentButton.disabled = false;
-      }
+        if (status) status.textContent = `Could not apply the standard dashboard: ${String(error)}`;
+      } finally { button.disabled = false; }
     });
     root.querySelector<HTMLButtonElement>("#echo-create-dashboard")?.addEventListener("click", async (event) => {
       const button = event.currentTarget as HTMLButtonElement;
       let status = root.querySelector<HTMLElement>("#echo-create-status");
       const target = targets.find((item) => item.key === (root.querySelector<HTMLSelectElement>("#echo-target")?.value || ""));
       if (!target) { if (status) status.textContent = "Select an Echo Show first."; return; }
+      if (!selectedProfileId || !savedProfiles.some((profile) => profile.id === selectedProfileId)) { if (status) status.textContent = "Select a Dash from the Dash Library before applying it to an Echo."; return; }
       button.disabled = true;
       if (status) status.textContent = "Applying this setup…";
       let created: any;
       let reusedExisting = false;
       let attached = false;
+      let showError = "";
       let priorManagedDashboards: Array<{ id: string; title: string; url_path: string; target: string }> = [];
       try {
         // Applying is also the point at which the working builder setup becomes
         // durable.  Without this, the generated Echo dashboard could contain
         // newer menus than the builder the user returns to edit.
-        const currentConfig = this.getCurrentConfig();
+        const workingConfig = this.getCurrentConfig();
+        const selectedDash = savedProfiles.find((profile) => profile.id === selectedProfileId)!;
+        const savedDash: EchoSavedDashboardProfile = { ...selectedDash, menus: workingConfig.menus || [], settings: dashSettings(workingConfig) };
+        const currentConfig = {
+          ...workingConfig,
+          saved_profiles: [...savedProfiles.filter((profile) => profile.id !== savedDash.id), savedDash],
+          active_profile_id: savedDash.id,
+        };
         const configuredMenus = getMenuProfiles(currentConfig, cameras, lights, temperatures);
         const invalidNavigation = configuredMenus.find((menu) => menu.action === "navigate" && !localDashboardPath(menu.destination));
         if (invalidNavigation) throw new Error(`Menu “${invalidNavigation.label}” needs a valid Home Assistant destination path, such as /lovelace/0.`);
         const lovelaceCards = await this.resolveLovelaceCards(currentConfig, configuredMenus);
-        if (!this.config.echo_managed) {
-          await this.persistBuilderConfig(currentConfig);
-          this.config = { ...currentConfig, echo_managed: false };
-        }
+        await this.persistBuilderConfig(currentConfig);
+        this.config = { ...currentConfig, echo_managed: false };
         const existing = await this.callWS({ type: "lovelace/dashboards/list" });
         const storageDashboards = (Array.isArray(existing) ? existing : []).filter((item: any) => item.mode === "storage" && item.id && item.url_path);
         const managedForTarget = await Promise.all(storageDashboards.map(async (dashboard: any) => {
@@ -802,24 +1373,30 @@ class EchoShowEditor extends HTMLElement {
             : null;
         }));
         priorManagedDashboards = managedForTarget.filter((dashboard): dashboard is { id: string; title: string; url_path: string; target: string } => Boolean(dashboard));
-        const usedPaths = new Set<string>(storageDashboards.map((item: any) => String(item.url_path || "")));
         const savedProfile: any = savedProfiles.find((item: any) => item.id === selectedProfileId);
         const profileName = savedProfile?.name || "";
         const baseTitle = [target.label.trim() || "Echo Show", profileName].filter(Boolean).join(" — ");
         const slug = baseTitle.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "echo-show";
-        let urlPath = slug;
-        let suffix = 2;
-        while (usedPaths.has(urlPath)) urlPath = `${slug}-${suffix++}`;
-        let title = suffix === 2 ? baseTitle : `${baseTitle} ${suffix - 1}`;
-        // A device has one managed dashboard. Updating it in place keeps its
-        // registered title valid for TECHO5 and avoids creating history.
-        const currentManaged = priorManagedDashboards[0];
-        if (currentManaged) {
+        // A device owns one builder-managed dashboard.  Reuse it instead of
+        // creating a replacement: a failed attach must never leave a second
+        // dashboard behind.  If legacy duplicates exist, keep the dashboard
+        // currently selected on the device and remove the stale one only after
+        // the updated configuration has been attached successfully.
+        const selectedDashboardTitle = String(this._hass?.states[target.dashboardToShow]?.state || "");
+        const existingForTarget = priorManagedDashboards.find((dashboard) => dashboard.title === selectedDashboardTitle) || priorManagedDashboards[0];
+        let urlPath: string;
+        let title: string;
+        if (existingForTarget) {
+          created = existingForTarget;
           reusedExisting = true;
-          urlPath = currentManaged.url_path;
-          title = currentManaged.title;
-          created = { id: currentManaged.id, url_path: urlPath, title };
+          urlPath = existingForTarget.url_path;
+          title = existingForTarget.title;
         } else {
+          const usedPaths = new Set<string>(storageDashboards.map((item: any) => String(item.url_path || "")));
+          urlPath = slug;
+          let suffix = 2;
+          while (usedPaths.has(urlPath)) urlPath = `${slug}-${suffix++}`;
+          title = suffix === 2 ? baseTitle : `${baseTitle} ${suffix - 1}`;
           created = await this.callWS({ type: "lovelace/dashboards/create", url_path: urlPath, title, show_in_sidebar: true, require_admin: false });
         }
         const menus = configuredMenus;
@@ -827,6 +1404,8 @@ class EchoShowEditor extends HTMLElement {
           type: "custom:echo-show",
           title,
           menus,
+          menu_toggles: currentConfig.menu_toggles,
+          menu_statuses: currentConfig.menu_statuses,
           echo_managed: true,
           included_cameras: currentConfig.included_cameras,
           included_lights: currentConfig.included_lights,
@@ -838,6 +1417,10 @@ class EchoShowEditor extends HTMLElement {
           camera_order: currentConfig.camera_order,
           camera_refresh_interval: currentConfig.camera_refresh_interval,
           camera_refresh_intervals: currentConfig.camera_refresh_intervals,
+          camera_person_entities: currentConfig.camera_person_entities,
+          person_detection: currentConfig.person_detection,
+          detection_types: currentConfig.detection_types,
+          camera_detections: currentConfig.camera_detections,
           echo_target: target.key,
           echo_dashboard: title,
           echo_mode: currentConfig.echo_mode || "Streamed",
@@ -849,49 +1432,12 @@ class EchoShowEditor extends HTMLElement {
         if (!this._hass?.callService) throw new Error("Home Assistant device controls are unavailable.");
         await this._hass.callService("select", "select_option", { entity_id: target.dashboard, option: mode });
         await this._hass.callService("switch", idle ? "turn_on" : "turn_off", { entity_id: target.idle });
-        // TECHO5 chooses from Home Assistant dashboard titles.  A raw Lovelace
-        // page path is not a dashboard and makes the device show its error page.
-        const availableDashboardTitles = async (): Promise<string[]> => {
-          const states = await this.callWS({ type: "get_states" });
-          const dashboardState = Array.isArray(states)
-            ? states.find((state: any) => state?.entity_id === target.dashboardToShow)
-            : undefined;
-          const options = dashboardState?.attributes?.options;
-          return Array.isArray(options) ? options.map((option: unknown) => String(option)) : [];
-        };
-        let dashboardAvailable = reusedExisting;
-        for (let attempt = 0; attempt < 20; attempt += 1) {
-          if ((await availableDashboardTitles()).includes(title)) {
-            dashboardAvailable = true;
-            break;
-          }
-          await new Promise<void>((resolve) => window.setTimeout(resolve, 500));
-        }
-        if (!dashboardAvailable) {
-          throw new Error(`Home Assistant did not make “${title}” available to ${target.label}.`);
-        }
-        const currentDashboardTitles = await this.callWS({ type: "get_states" });
-        const currentDashboardState = Array.isArray(currentDashboardTitles)
-          ? currentDashboardTitles.find((state: any) => state?.entity_id === target.dashboardToShow)
-          : undefined;
-        if (currentDashboardState?.state !== title) {
-          await this._hass.callService("select", "select_option", { entity_id: target.dashboardToShow, option: title });
-        }
-        let dashboardSelected = false;
-        for (let attempt = 0; attempt < 10; attempt += 1) {
-          const states = await this.callWS({ type: "get_states" });
-          const dashboardState = Array.isArray(states)
-            ? states.find((state: any) => state?.entity_id === target.dashboardToShow)
-            : undefined;
-          if (dashboardState?.state === title) {
-            dashboardSelected = true;
-            break;
-          }
-          await new Promise<void>((resolve) => window.setTimeout(resolve, 500));
-        }
-        if (!dashboardSelected) {
-          throw new Error(`Home Assistant did not confirm “${title}” on ${target.label}.`);
-        }
+        // TECHO5 can show a dashboard directly by its Lovelace path. This is
+        // essential for devices such as Show 5 whose Dashboard-to-show selector
+        // deliberately contains only “Automatic”; waiting for a title there
+        // leaves a newly created dashboard unattached.
+        await this._hass.callService("esphome", `${target.key}_dashboard_path`, { path: `/${urlPath}` });
+        await this._hass.callService("esphome", `${target.key}_dashboard_show`, {});
         attached = true;
         const retained: Array<{ id: string; title: string; url_path: string; target: string }> = [];
         const removalErrors: string[] = [];
@@ -913,11 +1459,12 @@ class EchoShowEditor extends HTMLElement {
         this.render();
         status = this.shadowRoot?.querySelector<HTMLElement>("#echo-create-status") || null;
         if (status) {
-          status.textContent = removalErrors.length
+          status.textContent = (removalErrors.length
             ? `Applied the setup to ${target.label}. Home Assistant could not remove every previous builder dashboard, so those are still listed for removal: ${removalErrors.join("; ")}`
             : priorManagedDashboards.length
               ? `Applied the setup to ${target.label}; its previous builder dashboard${priorManagedDashboards.length === 1 ? " was" : "s were"} replaced. Your saved setups and builder preview remain.`
-              : `Applied the setup to ${target.label}. Your saved setups and builder preview remain.`;
+              : `Applied the setup to ${target.label}. Your saved setups and builder preview remain.`)
+            + (showError ? ` The dashboard was attached, but could not be shown immediately: ${showError}` : "");
         }
       } catch (error) {
         if (created?.id && !attached && !reusedExisting) {

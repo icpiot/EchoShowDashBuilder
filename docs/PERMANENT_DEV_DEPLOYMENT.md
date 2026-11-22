@@ -6,16 +6,16 @@ Build the current Git revision with `npm run typecheck` and `npm run build`. Cop
 match.
 
 Home Assistant must contain exactly one JavaScript module resource for this
-project:
+development project:
 
-`/local/echo-dashboard-card-dev.js?v=<short-git-revision>`
+`/local/echo-dashboard-card-dev.js?v=<first-eight-characters-of-bundle-SHA256>`
 
-Update that existing resource's URL after each build; do not add another
+Update that existing resource's URL after each changed bundle; do not add another
 EchoShowHTMLDash resource. Keep older files in `/config/www/` only as rollback
 artifacts, and do not register them. Reload the development dashboard in a
 fresh browser context after changing the resource URL.
 
-Rollback is performed by checking out a known-good Git commit, rebuilding,
-copying the resulting bundle over `echo-dashboard-card-dev.js`, and updating
-the existing resource query parameter. Do not edit Home Assistant internal
-storage directly.
+Rollback uses a known-good bundle, copied over `echo-dashboard-card-dev.js`,
+followed by updating the same resource query parameter to that bundle's hash.
+Do not edit Home Assistant internal storage directly. Updating the resource
+does not itself save a Dash or apply it to a device.
