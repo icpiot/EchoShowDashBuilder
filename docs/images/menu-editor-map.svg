@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 535" role="img" aria-labelledby="title desc">
+  <title id="title">Menu editor control map</title>
+  <desc id="desc">A menu has its own order, name, icon, action, area filter, and selections for cameras, lights, temperature sensors, or custom cards.</desc>
+  <rect width="1000" height="535" rx="18" fill="#f6f8fa"/>
+  <rect x="32" y="24" width="936" height="487" rx="14" fill="white" stroke="#d0d7de" stroke-width="2"/>
+  <g font-family="Arial, sans-serif" fill="#202d36"><text x="54" y="63" font-size="25" font-weight="700">Menu 1: Example room</text><text x="910" y="63" font-size="24">⌄</text></g>
+  <g font-family="Arial, sans-serif" font-size="17" fill="#314754">
+    <text x="70" y="113">Menu order</text><text x="290" y="113">Menu name</text><text x="585" y="113">Icon (optional)</text>
+    <text x="70" y="199">Action: show content or navigate</text><text x="535" y="199">Content: fit or scroll</text>
+    <text x="70" y="285">Area filter: narrows the choices below</text>
+    <text x="70" y="374">Cameras · select, order, size, detection</text>
+    <text x="70" y="415">Lights · choose controls</text>
+    <text x="70" y="456">Temperature · choose sensors</text>
+  </g>
+  <g stroke="#d0d7de" fill="#f6f8fa"><rect x="68" y="125" width="165" height="38" rx="6"/><rect x="288" y="125" width="240" height="38" rx="6"/><rect x="583" y="125" width="306" height="38" rx="6"/><rect x="68" y="211" width="395" height="38" rx="6"/><rect x="532" y="211" width="357" height="38" rx="6"/><rect x="68" y="298" width="821" height="38" rx="6"/></g>
+  <g font-family="Arial, sans-serif" font-size="15" fill="#697b86"><text x="82" y="150">1</text><text x="303" y="150">Example room</text><text x="597" y="150">mdi:home</text><text x="82" y="236">Show this menu</text><text x="547" y="236">Fit to remaining area</text><text x="82" y="323">All areas or a chosen area</text></g>
+</svg>

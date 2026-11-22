@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 220" role="img" aria-labelledby="title desc">
+  <title id="title">Echo Show dashboard workflow</title>
+  <desc id="desc">Create or select a Dash, configure menus and controls, save the Dash, then apply it to one Echo.</desc>
+  <rect width="1100" height="220" rx="20" fill="#f6f8fa"/>
+  <g font-family="Arial, sans-serif" text-anchor="middle">
+    <g fill="#e4f4fa" stroke="#1286a8" stroke-width="2"><rect x="22" y="62" width="235" height="96" rx="14"/><rect x="294" y="62" width="235" height="96" rx="14"/><rect x="566" y="62" width="235" height="96" rx="14"/><rect x="838" y="62" width="235" height="96" rx="14"/></g>
+    <g fill="#18313b" font-size="21" font-weight="700"><text x="139" y="104">Dash Library</text><text x="411" y="104">Menus &amp; controls</text><text x="683" y="104">Save Dash</text><text x="955" y="104">Apply to Echo</text></g>
+    <g fill="#40545c" font-size="14"><text x="139" y="128">Select, add, or copy</text><text x="411" y="128">Choose content and order</text><text x="683" y="128">Store named setup</text><text x="955" y="128">Choose one device</text></g>
+    <g fill="#1286a8" font-size="31" font-weight="700"><text x="275" y="122">→</text><text x="547" y="122">→</text><text x="819" y="122">→</text></g>
+  </g>
+</svg>
