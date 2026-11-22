@@ -12,7 +12,7 @@ For each TECHO5 device, the editor discovers:
 
 The editor reads the dashboard-to-show options before allowing an assignment. This prevents sending an unsupported dashboard name to a device. After an assignment, it reads the selected entity state back and reports whether Home Assistant has confirmed the requested dashboard.
 
-## Devices observed on HA111
+## Example device entities
 
 - Al Office Echo 8: `select.al_office_echo_8_dashboard`, `select.al_office_echo_8_dashboard_to_show`, `switch.al_office_echo_8_dashboard_when_idle`
 - Al Show 5: `select.al_show_5_dashboard`, `select.al_show_5_dashboard_to_show`, `switch.al_show_5_dashboard_when_idle`

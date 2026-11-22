@@ -1,4 +1,4 @@
-# HA111 development deployment plan
+# Isolated development deployment plan
 
 This plan is for an isolated development test only. Existing dashboards and resources remain unchanged.
 
@@ -10,11 +10,11 @@ This plan is for an isolated development test only. Existing dashboards and reso
 - Test dashboard title: `Echo Show HTML Dash Dev`
 - Test dashboard URL path: `echo-show-html-dash-dev`
 
-The resource name is unique and is not present in the current HA111 resource list.
+Choose a resource name that does not conflict with the Home Assistant instance's current resource list.
 
 ## Deployment sequence
 
-1. Copy the generated bundle to HA111's `/config/www/` directory under the proposed filename.
+1. Copy the generated bundle to the test Home Assistant instance's `/config/www/` directory under the proposed filename.
 2. Add the proposed `/local/` URL as a JavaScript module resource.
 3. Open the dashboard creation flow and select the `Echo Show HTML Dash` strategy.
 4. Create the dashboard with kiosk mode disabled for PC testing.

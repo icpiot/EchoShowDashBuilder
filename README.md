@@ -32,4 +32,4 @@ The bundle registers the `echo-show` dashboard strategy, `custom:echo-menu`, and
 
 Each generated dashboard has an independent **Kiosk Mode** setting: Enabled writes the NemesisRE dashboard override `{ kiosk: true }`, Disabled writes `{ kiosk: false }`, and Inherit emits no dashboard-level override. It never changes global kiosk settings or destination dashboards.
 
-For the HA111 development instance, follow [the permanent development deployment procedure](docs/PERMANENT_DEV_DEPLOYMENT.md). Update the one existing development resource when its bundle changes; do not register a duplicate. Avoid applying a test setup to a different Echo.
+For development installations, follow [the development deployment procedure](docs/PERMANENT_DEV_DEPLOYMENT.md). Update the one existing development resource when its bundle changes; do not register a duplicate. Avoid applying a test setup to a different Echo.

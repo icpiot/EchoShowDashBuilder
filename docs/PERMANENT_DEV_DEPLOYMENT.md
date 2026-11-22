@@ -1,4 +1,4 @@
-# Permanent HA111 development deployment
+# Development deployment
 
 Build the current Git revision with `npm run typecheck` and `npm run build`. Copy
 `dist/echo-dashboard-card.js` to the HA `/config/www/` share as
