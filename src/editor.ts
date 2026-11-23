@@ -742,6 +742,7 @@ class EchoShowEditor extends HTMLElement {
       const selectedCards = new Set(Array.isArray(menu.lovelace_card_ids) && menu.lovelace_card_ids.length ? menu.lovelace_card_ids : menu.lovelace_card_id ? [menu.lovelace_card_id] : []);
       const selectedCardIds = Array.from(selectedCards);
       const cardLayouts = cardLayoutsFor(selectedCardIds, menu.lovelace_card_layouts);
+      const visualLayout = menu.source === "lovelace_card" && selectedCardIds.length ? `<div class="visual-layout" data-visual-layout-menu="${escapeHtml(menu.id)}"><strong>Arrange cards on the Echo</strong><p class="hint">Drag a card to move it. Use the buttons on a card to resize it. The preview uses the Echo grid and saves the layout immediately.</p><div class="visual-layout-grid">${[...selectedCardIds].sort((a, b) => (cardLayouts[a]?.order || 0) - (cardLayouts[b]?.order || 0)).map((id) => { const card = lovelaceCards.find((item) => item.id === id); const layout = cardLayouts[id] || { order: 1, width: 1, height: 1 }; return `<article class="visual-layout-item span-${layout.width} row-${layout.height}" draggable="true" data-layout-drag="${escapeHtml(id)}" title="Drag to move ${escapeHtml(card?.name || id)}"><span class="visual-layout-name">${escapeHtml(card?.name || id)}</span><span class="visual-layout-size">${layout.width} wide · ${layout.height} high</span><div class="visual-layout-actions"><button type="button" data-layout-resize="narrower" data-layout-card="${escapeHtml(id)}" aria-label="Make ${escapeHtml(card?.name || id)} narrower">−</button><button type="button" data-layout-resize="wider" data-layout-card="${escapeHtml(id)}" aria-label="Make ${escapeHtml(card?.name || id)} wider">+</button><button type="button" data-layout-resize="shorter" data-layout-card="${escapeHtml(id)}" aria-label="Make ${escapeHtml(card?.name || id)} shorter">−</button><button type="button" data-layout-resize="taller" data-layout-card="${escapeHtml(id)}" aria-label="Make ${escapeHtml(card?.name || id)} taller">+</button></div></article>`; }).join("")}</div><div class="hint">Width: −/+ · Height: −/+ · Drag cards to change their order.</div></div>` : "";
       const sourcePicker = menu.action === "navigate" ? "" : `<div class="row"><label>Button source <select data-menu-source><option value="menu" ${menu.source === "lovelace_card" ? "" : "selected"}>Menu content</option><option value="lovelace_card" ${menu.source === "lovelace_card" ? "selected" : ""}>Lovelace Cards</option></select></label></div>${menu.source === "lovelace_card" ? `<div class="card-picker"><strong>Cards in this menu</strong>${lovelaceCards.map((card) => {
         const selected = selectedCards.has(card.id);
         const layout = cardLayouts[card.id] || { order: selectedCardIds.length + 1, width: 1, height: 1 };
@@ -754,7 +755,7 @@ class EchoShowEditor extends HTMLElement {
       <summary>Menu ${index + 1}: ${escapeHtml(menu.label)}<span class="menu-summary">${menu.action === "navigate" ? "Navigation" : menu.source === "lovelace_card" ? `${selectedCardIds.length} custom card${selectedCardIds.length === 1 ? "" : "s"}` : `${(menu.cameras || []).length + (menu.lights || []).length + (menu.temperatures || []).length} selected`} · Order ${index + 1}</span></summary>
       <div class="row"><label class="order-field">Menu order <select data-menu-order>${menuProfiles.map((_, optionIndex) => `<option value="${optionIndex + 1}" ${index === optionIndex ? "selected" : ""}>${optionIndex + 1}</option>`).join("")}</select></label><label>Menu name <input type="text" data-menu-label value="${escapeHtml(menu.label)}"></label><label class="icon-field">Icon (optional)<span class="icon-control"><span class="icon-preview" data-icon-preview>${menu.icon ? `<ha-icon icon="${escapeHtml(menu.icon)}"></ha-icon>` : "No icon"}</span><input type="text" data-menu-icon value="${escapeHtml(menu.icon)}" placeholder="Leave blank for no icon"><details class="icon-picker"><summary>Choose icon</summary><input type="search" data-icon-search placeholder="Search all Material Design icons"><div class="icon-options">${MENU_ICON_CHOICES.map(([value, label]) => iconChoiceMarkup(value, label)).join("")}</div><div class="icon-search-status hint"></div></details></span></label><label class="placement-field">Icon placement <select data-menu-icon-placement><option value="left" ${menu.icon_placement === "left" ? "selected" : ""}>Left</option><option value="center" ${menu.icon_placement === "center" ? "selected" : ""}>Middle</option><option value="right" ${menu.icon_placement === "right" ? "selected" : ""}>Right</option></select></label></div>
       <div class="row"><label>Action <select data-menu-action><option value="view" ${menu.action === "navigate" ? "" : "selected"}>Show this menu</option><option value="navigate" ${menu.action === "navigate" ? "selected" : ""}>Navigate to Dashboard</option></select></label><label>Icon follows state (optional)<input type="text" data-menu-icon-entity value="${escapeHtml(menu.icon_entity || "")}" placeholder="weather.home"></label>${menu.action === "navigate" ? `${destinationSelect}${customDestination}` : ""}</div>${menu.action === "navigate" ? `<div class="hint">Choose any available Home Assistant dashboard or view. Custom paths are limited to this Home Assistant instance and open in the current session without changing the Echo assignment.</div>${this.dashboardDestinationsLoading ? `<div class="hint">Loading dashboards and views…</div>` : ""}${this.dashboardDestinationsError ? `<div class="hint">Could not load the dashboard list: ${escapeHtml(this.dashboardDestinationsError)}</div>` : ""}` : `<div class="row"><label>Content below menu <select data-menu-content-overflow><option value="fit" ${menu.content_overflow === "scroll" ? "" : "selected"}>Fit to remaining area</option><option value="scroll" ${menu.content_overflow === "scroll" ? "selected" : ""}>Scrollable below menu</option></select></label></div><div class="hint">The menu bar remains fixed. Fit to remaining area responsively scales the content below it; Scrollable below menu keeps its selected size and scrolls only that area.</div>`}
-      ${sourcePicker}
+       ${sourcePicker}${visualLayout}
       <div class="row">${areaSelect}</div>${this.areaRegistryError ? `<div class="hint">Area filters are unavailable: ${escapeHtml(this.areaRegistryError)}</div>` : this.areaRegistryLoading ? `<div class="hint">Loading Home Assistant areas…</div>` : `<div class="hint">Choose an area to narrow the camera, light, and temperature lists for this menu, then tick the entities you want to show.</div>`}
       ${menu.action === "navigate" ? "" : `<details class="content-picker" ${(pickerOpen[0] ?? false) ? "open" : ""}><summary>Cameras · ${(menu.cameras || []).length} selected</summary>${menuCameras.length ? menuCameras.map((camera) => `<div class="camera-choice"><label class="camera"><input type="checkbox" data-menu-camera value="${escapeHtml(camera.entityId)}" ${(menu.cameras || []).includes(camera.entityId) ? "checked" : ""}>${escapeHtml(camera.label)}</label>${(menu.cameras || []).includes(camera.entityId) ? cameraAppearance(camera, menu.id) : ""}</div>`).join("") : `<div class="hint">No cameras are available in this area.</div>`}</details>
       <details class="content-picker" ${(pickerOpen[1] ?? false) ? "open" : ""}><summary>Choose lights · ${(menu.lights || []).length} selected</summary>${menuLights.length ? menuLights.map((light: any) => `<label class="camera"><input type="checkbox" data-menu-light value="${escapeHtml(light.entity_id)}" ${(menu.lights || []).includes(light.entity_id) ? "checked" : ""}>${escapeHtml(light.attributes?.friendly_name || light.entity_id)}</label>`).join("") : `<div class="hint">No lights are available in this area.</div>`}</details>
@@ -789,7 +790,7 @@ class EchoShowEditor extends HTMLElement {
       .camera-settings-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.camera-settings-row>label{display:flex;gap:6px;align-items:center;flex:1 1 150px}.camera-settings-row select{min-width:82px}
       .custom-card-choice{display:flex;gap:10px;align-items:center;flex-wrap:wrap;border-bottom:1px solid var(--builder-line);padding:5px 4px}.custom-card-choice:last-child{border-bottom:0}.custom-card-choice>.camera{border:0;flex:1 1 260px}.card-layout-inline{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:5px 8px;background:color-mix(in srgb,var(--primary-color,#03a9f4) 4%,transparent);border-radius:6px}.card-layout-inline[aria-disabled=true]{opacity:.5;background:transparent}.card-layout-inline>label{display:flex;gap:6px;align-items:center}
       .deployment-actions{align-items:center;min-height:42px}.deployment-actions .action-feedback{flex:1 1 300px;min-height:20px;margin:0;display:flex;align-items:center}.deployment-actions .action-feedback:empty{visibility:hidden}#managed-delete-status{display:block;margin:8px 0}
-      .save-explainer{padding:9px 10px;border-left:3px solid var(--primary-color,#03a9f4);background:color-mix(in srgb,var(--primary-color,#03a9f4) 7%,transparent);font-size:.92em;line-height:1.4}.menu-summary{opacity:.75;font-weight:400;font-size:.9em;margin-left:8px}@media(max-width:600px){.section-nav{margin:0 -4px}.section-nav a{font-size:.8em}.row>label{flex-basis:100%}}
+      .save-explainer{padding:9px 10px;border-left:3px solid var(--primary-color,#03a9f4);background:color-mix(in srgb,var(--primary-color,#03a9f4) 7%,transparent);font-size:.92em;line-height:1.4}.menu-summary{opacity:.75;font-weight:400;font-size:.9em;margin-left:8px}.visual-layout{margin:10px 0;padding:12px;border:1px solid var(--builder-line);border-radius:8px;background:color-mix(in srgb,var(--primary-color,#03a9f4) 5%,transparent)}.visual-layout p{margin:4px 0 10px}.visual-layout-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-auto-rows:58px;gap:6px;min-height:64px;padding:6px;border:1px dashed var(--builder-line);background:var(--card-background-color,var(--primary-background-color));border-radius:6px}.visual-layout-item{grid-column:span 1;grid-row:span 1;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:2px;padding:5px;border:2px solid var(--primary-color,#03a9f4);border-radius:6px;background:color-mix(in srgb,var(--primary-color,#03a9f4) 15%,transparent);cursor:grab;user-select:none;min-width:0}.visual-layout-item.span-2{grid-column:span 2}.visual-layout-item.span-3{grid-column:span 3}.visual-layout-item.row-2{grid-row:span 2}.visual-layout-item:active{cursor:grabbing}.visual-layout-name{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}.visual-layout-size{font-size:.75em;opacity:.75}.visual-layout-actions{display:flex;gap:3px}.visual-layout-actions button{min-width:22px;height:22px;padding:0;line-height:1}.visual-layout-actions button:nth-child(3){margin-left:5px}@media(max-width:600px){.section-nav{margin:0 -4px}.section-nav a{font-size:.8em}.row>label{flex-basis:100%}.visual-layout-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
     </style>
       <nav class="section-nav" aria-label="Builder sections"><button type="button" data-section-target="setup-library">Dash Library</button><button type="button" data-section-target="dashboard-content">Menus</button><button type="button" data-section-target="menu-controls">Menu-bar controls</button><button type="button" data-section-target="echo-deployment">Apply to Echo</button></nav>
       ${builderPath !== wantedBuilderPath ? `<div class="section"><h3>Builder dashboard address</h3><div class="hint">Move this master builder to /${wantedBuilderPath}. Its saved setups and preview are kept; Echo dashboards are not changed.</div><button id="move-builder-path" type="button">Use builder address</button><div id="move-builder-status" class="hint" aria-live="polite"></div></div>` : ""}
@@ -1149,6 +1150,55 @@ class EchoShowEditor extends HTMLElement {
       this.hasUnsavedChanges = true;
       this.render();
     }));
+    const changeVisualCard = (card: HTMLElement, change: (layout: { order: number; width: number; height: number }, ids: string[]) => void) => {
+      const menuId = card.closest<HTMLElement>("[data-menu-card]")?.dataset.menuCard || "";
+      const cardId = card.dataset.layoutCard || card.dataset.layoutDrag || "";
+      if (!menuId || !cardId) return;
+      const current = readMenuProfiles();
+      const menu = current.find((item) => item.id === menuId);
+      if (!menu) return;
+      const ids = menu.lovelace_card_ids || [];
+      const layouts = cardLayoutsFor(ids, menu.lovelace_card_layouts);
+      change(layouts[cardId], ids);
+      menu.lovelace_card_layouts = layouts;
+      this.config = { ...this.config, menus: current };
+      this.hasUnsavedChanges = true;
+      this.render();
+    };
+    root.querySelectorAll<HTMLButtonElement>("[data-layout-resize]").forEach((button) => button.addEventListener("click", () => {
+      const card = button.closest<HTMLElement>("[data-layout-card]");
+      if (!card) return;
+      const direction = button.dataset.layoutResize;
+      changeVisualCard(card, (layout) => {
+        if (direction === "wider") layout.width = Math.min(3, layout.width + 1);
+        if (direction === "narrower") layout.width = Math.max(1, layout.width - 1);
+        if (direction === "taller") layout.height = Math.min(2, layout.height + 1);
+        if (direction === "shorter") layout.height = Math.max(1, layout.height - 1);
+      });
+    }));
+    root.querySelectorAll<HTMLElement>("[data-layout-drag]").forEach((item) => {
+      item.addEventListener("dragstart", (event) => { event.dataTransfer?.setData("text/plain", item.dataset.layoutDrag || ""); if (event.dataTransfer) event.dataTransfer.effectAllowed = "move"; });
+      item.addEventListener("dragover", (event) => { event.preventDefault(); if (event.dataTransfer) event.dataTransfer.dropEffect = "move"; });
+      item.addEventListener("drop", (event) => {
+        event.preventDefault();
+        const draggedId = event.dataTransfer?.getData("text/plain") || "";
+        const targetId = item.dataset.layoutDrag || "";
+        if (!draggedId || !targetId || draggedId === targetId) return;
+        const menuId = item.closest<HTMLElement>("[data-menu-card]")?.dataset.menuCard || "";
+        const current = readMenuProfiles();
+        const menu = current.find((entry) => entry.id === menuId);
+        if (!menu) return;
+        const ids = menu.lovelace_card_ids || [];
+        const layouts = cardLayoutsFor(ids, menu.lovelace_card_layouts);
+        const ordered = [...ids].sort((a, b) => layouts[a].order - layouts[b].order);
+        const reordered = moveCardToPosition(ordered, draggedId, Math.max(0, ordered.indexOf(targetId)));
+        menu.lovelace_card_ids = reordered;
+        menu.lovelace_card_layouts = reordered.reduce((next, id, index) => { next[id] = { ...layouts[id], order: index + 1 }; return next; }, {} as Record<string, { order: number; width: number; height: number }>);
+        this.config = { ...this.config, menus: current };
+        this.hasUnsavedChanges = true;
+        this.render();
+      });
+    });
     root.querySelectorAll<HTMLSelectElement>("[data-menu-destination]").forEach((select) => select.addEventListener("change", () => {
       this.emit({ menus: readMenuProfiles() }, true);
     }));
