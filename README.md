@@ -25,8 +25,6 @@ For the controls and illustrated steps, see the [user guide](docs/USER_GUIDE.md)
 
 Node.js and the packages in `package.json` are needed only by a developer building the JavaScript from source. They are not runtime dependencies on the Echo.
 
-## Installation status
+## Install
 
-This repository currently contains the source code, not a ready-to-install release. The [user guide](docs/USER_GUIDE.md) starts once the builder is already set up in Home Assistant. A complete first-time installation guide and automatic builder creation are still needed; registering the JavaScript file alone does not create the builder dashboard.
-
-The previous build commands were for developers working on the source, not steps an everyday user should have to follow. They are now in [developer setup](docs/DEVELOPER_SETUP.md).
+Install the **Echo Show HTML Dash** dashboard plugin through HACS or Home Assistant Marketplace. The [installation guide](docs/INSTALLATION.md) covers the first launch and the required TECHO5 and Dashcast setup. The [developer setup](docs/DEVELOPER_SETUP.md) is only for people changing the source code.
