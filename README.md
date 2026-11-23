@@ -16,14 +16,8 @@ That camera view grew into a dashboard builder. A single, editable **Echo Show D
 
 For the controls and illustrated steps, see the [user guide](docs/USER_GUIDE.md).
 
-## Build and install
+## Installation status
 
-```sh
-npm install
-npm run typecheck
-npm test
-```
+This repository currently contains the source code, not a ready-to-install release. The [user guide](docs/USER_GUIDE.md) starts once the builder is already set up in Home Assistant. A complete first-time installation guide and automatic builder creation are still needed; registering the JavaScript file alone does not create the builder dashboard.
 
-`npm run build` generates `dist/echo-dashboard-card.js`. For a manual installation, copy it to `/config/www/echo-dashboard-card.js` and register `/local/echo-dashboard-card.js` as a JavaScript module under **Settings → Dashboards → Resources**.
-
-Development deployments: [resource and cache procedure](docs/PERMANENT_DEV_DEPLOYMENT.md).
+The previous build commands were for developers working on the source, not steps an everyday user should have to follow. They are now in [developer setup](docs/DEVELOPER_SETUP.md).
