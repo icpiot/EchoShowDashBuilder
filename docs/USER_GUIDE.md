@@ -2,6 +2,8 @@
 
 The **Echo Show Dash HTML Builder** is the editable master dashboard. It stores named Dash setups. Applying one creates a dashboard for the selected Echo; editing the saved setup later does not change that Echo until you apply it again.
 
+Before starting, check the [requirements and installation status](../README.md#what-you-need). The steps below assume the builder is already available in Home Assistant.
+
 ![Choose a Dash, configure it, save it, and apply it](images/builder-flow.svg)
 
 The control pictures are diagrams, so they contain no private Home Assistant sidebar or entity names. The Show 8 camera view below is a real example shared with permission; your devices and layout will differ.

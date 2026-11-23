@@ -16,6 +16,15 @@ That camera view grew into a dashboard builder. A single, editable **Echo Show D
 
 For the controls and illustrated steps, see the [user guide](docs/USER_GUIDE.md).
 
+## What you need
+
+- **Home Assistant** with the dashboard's JavaScript resource installed. The repository declares Home Assistant 2024.12.0 as its minimum version; that is metadata, not a verified compatibility range.
+- **A TECHO5 Echo Show connected to Home Assistant** to assign a Dash to a device and open its native camera viewer from a camera tile. Camera menus also need camera entities available in Home Assistant.
+- **Dashcast for Streamed presentation.** It renders the Home Assistant dashboard for the Echo, including custom Lovelace cards. TECHO5's Drawn presentation does not render this project's custom cards as designed. See [TECHO5's dashboard guide](https://github.com/HuskerMinion/techo5/blob/main/docs/dashboards.md).
+- **Any optional custom Lovelace cards** you select in the builder must already be installed and working in Home Assistant.
+
+Node.js and the packages in `package.json` are needed only by a developer building the JavaScript from source. They are not runtime dependencies on the Echo.
+
 ## Installation status
 
 This repository currently contains the source code, not a ready-to-install release. The [user guide](docs/USER_GUIDE.md) starts once the builder is already set up in Home Assistant. A complete first-time installation guide and automatic builder creation are still needed; registering the JavaScript file alone does not create the builder dashboard.
