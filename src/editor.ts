@@ -918,6 +918,7 @@ class EchoShowEditor extends HTMLElement {
       .icon-preview:not(:has(ha-icon)){font-size:0}
       .icon-preview:not(:has(ha-icon))::after{content:"—";font-size:1rem;color:#8790aa}
       @media(max-width:900px){.section-nav{scrollbar-width:none}.section-nav::-webkit-scrollbar{display:none}}
+      .builder-dialog[hidden]{display:none}.builder-dialog{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:20px;background:#1c214766}.builder-dialog-card{width:min(420px,100%);padding:22px;border:1px solid #dfe3f0;border-radius:14px;background:#fff;box-shadow:0 20px 60px #20264a40}.builder-dialog-card h3{margin:0 0 8px}.builder-dialog-card p{margin:0 0 14px;color:var(--builder-muted);line-height:1.45}.builder-dialog-card input{width:100%;margin:4px 0 6px}.builder-dialog-error{min-height:20px;color:#a23b53;font-size:.82rem}.builder-dialog-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:14px}.builder-dialog-actions button{min-height:38px;padding:8px 13px;border:1px solid #d7dcef;border-radius:8px;background:#fff;color:#5038ce;font:inherit;font-weight:700}.builder-dialog-actions button:last-child{border-color:#523bd7;background:#523bd7;color:#fff}
     </style>
       <nav class="section-nav" aria-label="Builder workspace"><button type="button" data-section-target="overview">Overview</button><button type="button" data-section-target="menus">Menus &amp; Content</button><button type="button" data-section-target="controls">Controls &amp; Status</button><button type="button" data-section-target="deployment">Deployment</button></nav>
       <div class="section quick-start" id="quick-start"><h3>Overview</h3><div class="hint">Choose a saved Dash, arrange its menus and controls, then apply it to an Echo.</div><ol class="quick-steps"><li><button type="button" data-section-target="overview">Choose or add a Dash</button></li><li><button type="button" data-section-target="menus">Choose menus, entities and navigation</button></li><li><button type="button" data-section-target="controls">Add clock, temperature or actions</button></li><li><button type="button" data-section-target="deployment">Save and apply to one Echo</button></li></ol><div class="readiness-grid">${readinessItems.map((item) => `<span class="readiness ${item.ok ? "ready" : "needs-attention"}">${item.ok ? "✓" : "!"} ${escapeHtml(item.label)}</span>`).join("")}</div>${dependencyIssues.length ? `<div class="dependency-warning"><strong>Missing card dependencies:</strong> ${escapeHtml(dependencyIssues.join(", "))}. Sync the Content Library after installing those cards before applying this Dash.</div>` : `<div class="hint readiness-ok">No missing card dependencies detected.</div>`}</div>
@@ -925,6 +926,7 @@ class EchoShowEditor extends HTMLElement {
       <div class="section" id="setup-library"><h3>Dash Library (${savedProfiles.length})</h3><div class="hint">A Dash name is permanent. Select it to edit its own settings, add a blank Dash, or copy the selected Dash under a new name.</div>
         <div class="row"><label for="saved-profile">Dash name</label><select id="saved-profile"><option value="">Select a Dash</option>${savedProfiles.map((profile: any) => `<option value="${escapeHtml(profile.id)}" ${profile.id === selectedProfileId ? "selected" : ""}>${escapeHtml(profile.name)}</option>`).join("")}</select></div>
         <div class="row"><button id="add-profile" type="button">Add Dash</button><button id="copy-profile" type="button" ${selectedProfileId ? "" : "disabled"}>Copy Dash</button><button id="remove-profile" type="button" ${selectedProfileId ? "" : "disabled"}>Delete Dash</button></div><div id="dash-library-status" class="hint" aria-live="polite"></div></div>
+      <div id="builder-dialog" class="builder-dialog" hidden role="dialog" aria-modal="true" aria-labelledby="builder-dialog-title"><div class="builder-dialog-card"><h3 id="builder-dialog-title"></h3><p id="builder-dialog-message"></p><label id="builder-dialog-input-label" for="builder-dialog-input">Name</label><input id="builder-dialog-input" type="text" autocomplete="off"><div id="builder-dialog-error" class="builder-dialog-error" aria-live="polite"></div><div class="builder-dialog-actions"><button id="builder-dialog-cancel" type="button">Cancel</button><button id="builder-dialog-confirm" type="button">Continue</button></div></div></div>
       <details class="section custom-card-holder"><summary>Custom Card Holder</summary><div class="holder-content"><div class="hint">A separate, genuine Home Assistant Lovelace dashboard for native Copy Card and Paste Card. It is builder-only: it never becomes an Echo menu or is exported to an Echo dashboard.</div><div class="row"><button id="open-card-holder" type="button">Open Custom Card Holder</button><button id="sync-card-holder" type="button" ${this.config.card_holder_url_path ? "" : "disabled"}>Sync card library</button></div><div id="card-holder-status" class="hint" aria-live="polite"></div>${cardLibrary.length ? `<ul>${cardLibrary.map((card) => `<li class="camera"><span>${escapeHtml(card.name)} — ${escapeHtml(card.card_type)} — ${escapeHtml(card.id)}${card.missing ? " (missing from holder)" : ""}</span><label>Display name <input type="text" data-card-library-name="${escapeHtml(card.id)}" value="${escapeHtml(card.name)}"></label></li>`).join("")}</ul><div class="hint">Names are builder metadata; they do not change the original Lovelace card. Missing cards retain their ID so references cannot redirect.</div>` : `<div class="hint">No cards have been discovered yet. Paste cards into the holder, save them normally, then Sync card library.</div>`}</div></details>
       <div class="section" id="dashboard-content"><h3>Dashboard Content and Menus (${menuProfiles.length})</h3><div class="hint">Choose a menu from the list, then edit its content in the panel beside it.</div><div class="menus-workspace">${menuWorkspaceList}<div class="menu-workspace-editor">${menuEditors}<details class="menu-secondary-settings"><summary>Camera and detection defaults</summary><div class="row"><label>Default camera image refresh <select id="camera-refresh-default">${[100, 250, 500, 1000, 2000, 3000, 5000, 10000, 15000].map((value) => `<option value="${value}" ${cameraRefreshInterval === value ? "selected" : ""}>${value === 100 ? "Every 100 ms (10 fps, maximum load)" : value === 250 ? "Every 250 ms (4 fps, high load)" : value === 500 ? "Every 500 ms (2 fps)" : `Every ${value / 1000} seconds`}</option>`).join("")}</select></label></div><div class="hint">Per-camera overrides remain inside each camera.</div><div class="menu-toggles"><h4>Detection styles (${detectionTypes.length})</h4><div class="hint">Types are discovered from matching entity names.</div>${detectionEditors}<button id="add-detection-type" type="button">Add detection type</button></div></details></div></div></div>
       <div class="section" id="menu-controls"><h3>Menu-Bar Controls</h3><div class="hint">These controls apply across the dashboard, rather than to one menu.</div><div class="menu-toggles"><h4>Status displays (${menuStatuses.length})</h4><div class="hint">Show live time or an entity value, such as a room temperature. A display can optionally be tapped to navigate or run a service.</div>${statusEditors}<button id="add-menu-status" type="button">Add status display</button></div><div class="menu-toggles"><h4>Menu-bar toggles (${menuToggles.length})</h4><div class="hint">Add stateful controls such as Meeting mode. Their colour and text follow the chosen helper or switch, and you can run separate actions when turning on and off.</div>${toggleEditors}<button id="add-menu-toggle" type="button">Add toggle</button></div></div>
@@ -1077,7 +1079,7 @@ class EchoShowEditor extends HTMLElement {
     selectPage(this.activeWorkspacePage);
     root.querySelectorAll<HTMLButtonElement>("[data-delete-managed]").forEach((button) => button.addEventListener("click", async () => {
       const dashboard = this.managedDashboards.find((item) => item.id === button.dataset.deleteManaged);
-      if (!dashboard || !window.confirm(`Remove the dashboard “${dashboard.title}” (${dashboard.url_path})? This does not remove the Echo device.`)) return;
+      if (!dashboard || await openBuilderDialog({ title: `Remove “${dashboard.title}”?`, message: `This removes the managed dashboard at ${dashboard.url_path}. It does not remove the Echo device.`, kind: "confirm", confirmLabel: "Remove dashboard" }) !== true) return;
       try {
         await this.callWS({ type: "lovelace/dashboards/delete", dashboard_id: dashboard.id });
         this.managedDashboards = this.managedDashboards.filter((item) => item.id !== dashboard.id);
@@ -1152,37 +1154,70 @@ class EchoShowEditor extends HTMLElement {
         this.emit({ active_profile_id: "" }, true);
       }
     });
-    const dashName = (prompt: string): string | undefined => {
-      const value = window.prompt(prompt, "")?.trim() || "";
-      if (!value) return undefined;
-      if (savedProfiles.some((profile) => profile.name.localeCompare(value, undefined, { sensitivity: "accent" }) === 0)) {
+    const builderDialog = root.querySelector<HTMLElement>("#builder-dialog");
+    const dialogTitle = root.querySelector<HTMLElement>("#builder-dialog-title");
+    const dialogMessage = root.querySelector<HTMLElement>("#builder-dialog-message");
+    const dialogInput = root.querySelector<HTMLInputElement>("#builder-dialog-input");
+    const dialogInputLabel = root.querySelector<HTMLElement>("#builder-dialog-input-label");
+    const dialogError = root.querySelector<HTMLElement>("#builder-dialog-error");
+    const dialogConfirm = root.querySelector<HTMLButtonElement>("#builder-dialog-confirm");
+    const dialogCancel = root.querySelector<HTMLButtonElement>("#builder-dialog-cancel");
+    let resolveDialog: ((value: string | boolean | undefined) => void) | undefined;
+    const closeBuilderDialog = (value: string | boolean | undefined) => {
+      if (!builderDialog) return;
+      builderDialog.hidden = true;
+      const resolve = resolveDialog;
+      resolveDialog = undefined;
+      resolve?.(value);
+    };
+    const openBuilderDialog = (options: { title: string; message: string; kind: "name" | "confirm"; initial?: string; confirmLabel?: string }) => new Promise<string | boolean | undefined>((resolve) => {
+      if (!builderDialog || !dialogTitle || !dialogMessage || !dialogConfirm || !dialogInput || !dialogInputLabel) { resolve(undefined); return; }
+      resolveDialog = resolve;
+      dialogTitle.textContent = options.title;
+      dialogMessage.textContent = options.message;
+      dialogConfirm.textContent = options.confirmLabel || (options.kind === "name" ? "Continue" : "Confirm");
+      dialogInputLabel.hidden = options.kind !== "name";
+      dialogInput.hidden = options.kind !== "name";
+      dialogInput.value = options.initial || "";
+      if (dialogError) dialogError.textContent = "";
+      builderDialog.hidden = false;
+      (options.kind === "name" ? dialogInput : dialogConfirm).focus();
+    });
+    dialogCancel?.addEventListener("click", () => closeBuilderDialog(undefined));
+    dialogConfirm?.addEventListener("click", () => closeBuilderDialog(dialogInput?.hidden ? true : dialogInput?.value.trim() || undefined));
+    builderDialog?.addEventListener("click", (event) => { if (event.target === builderDialog) closeBuilderDialog(undefined); });
+    builderDialog?.addEventListener("keydown", (event) => { if (event.key === "Escape") { event.preventDefault(); closeBuilderDialog(undefined); } else if (event.key === "Enter" && document.activeElement === dialogInput) { event.preventDefault(); dialogConfirm?.click(); } });
+    const requestDashName = async (title: string, message: string): Promise<string | undefined> => {
+      const result = await openBuilderDialog({ title, message, kind: "name", confirmLabel: "Use name" });
+      if (typeof result !== "string" || !result) return undefined;
+      if (savedProfiles.some((profile) => profile.name.localeCompare(result, undefined, { sensitivity: "accent" }) === 0)) {
         const status = root.querySelector<HTMLElement>("#dash-library-status");
-        if (status) status.textContent = `A Dash named “${value}” already exists. Dash names are permanent and must be unique.`;
+        if (status) status.textContent = `A Dash named “${result}” already exists. Names must be unique.`;
         return undefined;
       }
-      return value;
+      return result;
     };
-    root.querySelector<HTMLButtonElement>("#add-profile")?.addEventListener("click", () => {
-      const name = dashName("New Dash name");
+    root.querySelector<HTMLButtonElement>("#add-profile")?.addEventListener("click", async () => {
+      const name = await requestDashName("Create a new Dash", "Choose a permanent name for this blank Dash.");
       if (!name) return;
       const id = `dash-${Date.now()}`;
       const profile: EchoSavedDashboardProfile = { id, name, menus: [], settings: { menus: [], menu_toggles: [], menu_statuses: [], camera_order: [], camera_overlays: {}, camera_spans: {}, camera_refresh_interval: 3000, camera_refresh_intervals: {}, camera_person_entities: {}, person_detection: { animation: "soft-pulse", color: "#ffc107", show_badge: false, badge_text: "Person" }, detection_types: [{ id: "person", label: "Person", match: "person", animation: "soft-pulse", color: "#ffc107", show_badge: false, badge_text: "Person" }, { id: "dog", label: "Dog", match: "dog", animation: "soft-pulse", color: "#7e57c2", show_badge: true, badge_text: "Dog" }], camera_detections: {}, kiosk_mode: "inherit", echo_target: "", echo_mode: "Streamed", echo_dashboard_when_idle: false } };
       this.selectedProfileId = id;
       this.emit({ ...profileSettings(profile), saved_profiles: [...savedProfiles, profile], active_profile_id: id }, true);
     });
-    root.querySelector<HTMLButtonElement>("#copy-profile")?.addEventListener("click", () => {
+    root.querySelector<HTMLButtonElement>("#copy-profile")?.addEventListener("click", async () => {
       const source = savedProfiles.find((profile) => profile.id === selectedProfileId);
       if (!source) return;
-      const name = dashName(`Copy “${source.name}” as`);
+      const name = await requestDashName(`Copy “${source.name}”`, "Choose a new permanent name for the copied Dash.");
       if (!name) return;
       const id = `dash-${Date.now()}`;
       const copied: EchoSavedDashboardProfile = { ...JSON.parse(JSON.stringify(source)), id, name };
       this.selectedProfileId = id;
       this.emit({ ...profileSettings(copied), saved_profiles: [...savedProfiles, copied], active_profile_id: id }, true);
     });
-    root.querySelector<HTMLButtonElement>("#remove-profile")?.addEventListener("click", () => {
+    root.querySelector<HTMLButtonElement>("#remove-profile")?.addEventListener("click", async () => {
       const profile = savedProfiles.find((item) => item.id === selectedProfileId);
-      if (!profile || !window.confirm(`Delete Dash “${profile.name}” from this library? Existing Echo dashboards will not be changed.`)) return;
+      if (!profile || await openBuilderDialog({ title: `Delete Dash “${profile.name}”?`, message: "This removes it from the builder library. Existing Echo dashboards will not be changed.", kind: "confirm", confirmLabel: "Delete Dash" }) !== true) return;
       const next = savedProfiles.filter((item: any) => item.id !== profile.id);
       this.selectedProfileId = "";
       this.emit({ saved_profiles: next, active_profile_id: "" }, true);
