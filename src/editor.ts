@@ -1176,7 +1176,8 @@ class EchoShowEditor extends HTMLElement {
     const openBuilderDialog = (options: { title: string; message: string; kind: "name" | "confirm"; initial?: string; confirmLabel?: string }) => new Promise<string | boolean | undefined>((resolve) => {
       if (!builderDialog || !dialogTitle || !dialogMessage || !dialogConfirm || !dialogInput || !dialogInputLabel) { resolve(undefined); return; }
       resolveDialog = resolve;
-      dialogTrigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      const shadowActive = this.shadowRoot?.activeElement;
+      dialogTrigger = shadowActive instanceof HTMLElement ? shadowActive : (document.activeElement instanceof HTMLElement ? document.activeElement : null);
       dialogTitle.textContent = options.title;
       dialogMessage.textContent = options.message;
       dialogConfirm.textContent = options.confirmLabel || (options.kind === "name" ? "Continue" : "Confirm");
