@@ -1,6 +1,6 @@
 # Echo Show Dash Builder
 
-## Why we built it
+## Why it was built
 
 This project began with cameras. Existing Home Assistant camera cards did not work reliably on our Echo Show: feeds had connection problems, and the camera wall was difficult to use on its small screen. We wanted a camera view designed for the Echo, where we could choose the feeds, control their size and refresh, and tap a tile to open the Echo's native camera viewer.
 
