@@ -798,13 +798,14 @@ class EchoShowEditor extends HTMLElement {
     if (selectedMenu) this.selectedMenuId = selectedMenu.id;
     const menuWorkspaceList = `<aside class="menu-workspace-list"><div class="panel-heading"><div><span class="eyebrow">STRUCTURE</span><h4>Dashboard menus <em>${menuProfiles.length}</em></h4></div></div><p class="hint">Choose a menu to edit its content.</p><ol>${menuProfiles.map((menu, index) => `<li><button type="button" data-menu-focus="${escapeHtml(menu.id)}" class="${menu.id === this.selectedMenuId ? "selected" : ""}" ${menu.id === this.selectedMenuId ? 'aria-current="true"' : ""}><span class="menu-number">${index + 1}</span><span class="menu-list-copy"><strong>${escapeHtml(menu.label)}</strong><small>${menu.action === "navigate" ? "Navigation" : menu.source === "lovelace_card" ? `${menu.lovelace_card_ids?.length || 0} cards` : `${(menu.cameras?.length || 0) + (menu.lights?.length || 0) + (menu.temperatures?.length || 0)} items`}</small></span></button></li>`).join("")}</ol><button type="button" id="add-menu" class="secondary-action">＋ Add menu</button></aside>`;
     const menuPreviewMarkup = (menu?: EchoMenuConfig) => {
-      const labels = menu?.action === "navigate" ? ["Opens another dashboard"] : menu?.source === "lovelace_card"
-        ? (menu.lovelace_card_ids || []).map((id) => cardLibrary.find((card) => card.id === id)?.name || id)
-        : [...(menu?.cameras || []).map((id) => cameras.find((camera) => camera.entityId === id)?.label || id), ...(menu?.lights || []).map((id) => String(this._hass?.states[id]?.attributes?.friendly_name || id)), ...(menu?.temperatures || []).map((id) => String(this._hass?.states[id]?.attributes?.friendly_name || id))];
-      return `<div class="echo-preview-screen"><div class="echo-preview-nav">${menuProfiles.slice(0, 5).map((item) => `<span class="${item.id === menu?.id ? "active" : ""}">${escapeHtml(item.label)}</span>`).join("")}</div><div class="echo-preview-content"><strong>${escapeHtml(menu?.label || "No menu selected")}</strong><div class="echo-preview-tiles">${labels.slice(0, 6).map((label) => `<span>${escapeHtml(label)}</span>`).join("") || `<span>No content selected</span>`}</div>${labels.length > 6 ? `<small>+${labels.length - 6} more</small>` : ""}</div></div>`;
+      const selectedCameras = [...(menu?.cameras || [])].sort((a, b) => cameraOrder.indexOf(a) - cameraOrder.indexOf(b));
+      const tiles = menu?.action === "navigate" ? [{ label: "Opens another dashboard", span: 2 }] : menu?.source === "lovelace_card"
+        ? (menu.lovelace_card_ids || []).map((id) => ({ label: cardLibrary.find((card) => card.id === id)?.name || id, span: 1 }))
+        : [...selectedCameras.map((id) => ({ label: cameras.find((camera) => camera.entityId === id)?.label || id, span: Math.max(1, Math.min(2, Number(this.config.camera_spans?.[id]) || 1)) })), ...(menu?.lights || []).map((id) => ({ label: String(this._hass?.states[id]?.attributes?.friendly_name || id), span: 1 })), ...(menu?.temperatures || []).map((id) => ({ label: String(this._hass?.states[id]?.attributes?.friendly_name || id), span: 1 }))];
+      return `<div class="echo-preview-screen"><div class="echo-preview-nav">${menuProfiles.slice(0, 5).map((item) => `<span class="${item.id === menu?.id ? "active" : ""}">${escapeHtml(item.label)}</span>`).join("")}</div><div class="echo-preview-content"><strong>${escapeHtml(menu?.label || "No menu selected")}</strong><div class="echo-preview-tiles">${tiles.slice(0, 6).map((tile) => `<span class="${tile.span > 1 ? "wide" : ""}">${escapeHtml(tile.label)}</span>`).join("") || `<span>No content selected</span>`}</div>${tiles.length > 6 ? `<small>+${tiles.length - 6} more</small>` : ""}</div></div>`;
     };
     const includedItemsMarkup = (menu?: EchoMenuConfig) => {
-      const ids = menu?.source === "lovelace_card" ? menu.lovelace_card_ids || [] : [...(menu?.cameras || []), ...(menu?.lights || []), ...(menu?.temperatures || [])];
+      const ids = menu?.source === "lovelace_card" ? menu.lovelace_card_ids || [] : [...(menu?.cameras || [])].sort((a, b) => cameraOrder.indexOf(a) - cameraOrder.indexOf(b)).concat(menu?.lights || [], menu?.temperatures || []);
       const labelFor = (id: string) => cardLibrary.find((card) => card.id === id)?.name || cameras.find((camera) => camera.entityId === id)?.label || String(this._hass?.states[id]?.attributes?.friendly_name || id);
       return `<div class="included-items-panel"><div class="panel-heading"><div><span class="eyebrow">CONTENT</span><h4>Included items <em>${ids.length}</em></h4></div></div>${ids.length ? `<ol>${ids.slice(0, 8).map((id, index) => `<li><span class="item-order">${index + 1}</span><strong>${escapeHtml(labelFor(id))}</strong><small>${id.startsWith("camera.") ? "Camera" : id.startsWith("light.") ? "Light" : id.startsWith("sensor.") ? "Sensor" : "Card"}</small></li>`).join("")}</ol>${ids.length > 8 ? `<div class="hint">+${ids.length - 8} more items</div>` : ""}` : `<p class="hint">Choose content for this menu in the editor above.</p>`}</div>`;
     };
@@ -865,6 +866,27 @@ class EchoShowEditor extends HTMLElement {
       @media(max-width:900px){.deployment-layout{grid-template-columns:1fr}.overview-rail{grid-template-columns:1fr}.quick-steps{grid-template-columns:repeat(5,minmax(0,1fr))}}
       @media(max-width:560px){.builder-app-header button:not(.primary-action){display:none}.quick-steps{grid-template-columns:1fr;gap:6px}.quick-steps li:not(:last-child)::after{display:none}.quick-steps button{display:flex;align-items:center;text-align:left;min-height:40px}.dash-library-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
       .publish-summary{margin:14px 0;padding:14px;border:1px solid #e7e9f2;border-radius:10px;background:#fafbff}.publish-summary>strong{font-size:.9rem}.publish-summary dl{margin:8px 0 0}.publish-summary dl>div{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-top:1px solid #ebedf5}.publish-summary dt{font-size:.76rem;color:var(--builder-muted)}.publish-summary dd{margin:0;text-align:right;font-size:.78rem;font-weight:700}
+      /* A single visual system for editor actions and fields. */
+      .menu-workspace-editor,.menu-config,.menu-config .row,.menu-config label,.camera-choice,.camera-appearance,.camera-settings-row,.camera-settings-row>label,#setup-library{min-width:0;max-width:100%;box-sizing:border-box}
+      .menu-config input:not([type=checkbox]):not([type=color]),.menu-config select,.menu-config .icon-control,#setup-library select{min-width:0;max-width:100%;box-sizing:border-box}
+      .camera-settings-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 14px;align-items:start}
+      .camera-settings-row>label{display:grid;grid-template-columns:minmax(0,1fr);gap:5px;align-items:start;min-width:0;overflow-wrap:anywhere;font-size:.8rem;font-weight:650;color:#45506c}
+      .camera-settings-row select{width:100%;min-width:0;max-width:100%;font-size:.82rem;font-weight:500;color:var(--builder-ink)}
+      .camera-settings-row input[type=checkbox]{justify-self:start;margin:8px 0}
+      .camera-appearance{margin:5px 0 12px;padding:12px;border:1px solid #e1e6f3;border-radius:10px;background:#f7f9fd}
+      .camera-appearance>summary{color:#353b63;font-size:.83rem}
+      .echo-preview-tiles .wide{grid-column:span 2}
+      .menu-config button:not(.visual-layout-actions button),#setup-library .row button,.menu-secondary-settings button,.deployment-history-panel button{min-height:38px;padding:8px 12px;border:1px solid #d7dcef;border-radius:8px;background:#fff;color:#5038ce;font:inherit;font-size:.82rem;font-weight:700;box-shadow:none}
+      .menu-config button:not(.visual-layout-actions button):hover,#setup-library .row button:hover,.menu-secondary-settings button:hover{border-color:#8e7de6;background:#f5f2ff}
+      .menu-config [data-remove-menu],#remove-profile{color:#a23b53!important;border-color:#efd1d9!important;background:#fff9fa!important}
+      #setup-library .row:has(#saved-profile){display:grid;grid-template-columns:1fr;gap:6px}
+      #setup-library .row:has(#add-profile){display:flex;align-items:center;gap:9px}
+      #setup-library .row select{min-width:0;width:100%}
+      #setup-library .row button{white-space:nowrap}
+      @media(min-width:1101px) and (max-width:1450px){.section-nav{width:154px;margin-left:14px;margin-right:16px}.section{margin-left:188px;margin-right:16px}.menus-workspace{grid-template-columns:minmax(145px,160px) minmax(0,1fr) minmax(180px,200px);gap:10px}.menu-workspace-list,.menu-preview-panel{padding:13px}.menu-config{padding:8px}.menu-config>.row,.menu-config>.hint,.menu-config>.content-picker,.menu-config>.card-picker,.menu-config>.visual-layout{margin-left:9px;margin-right:9px}}
+      @media(max-width:1100px){.menus-workspace{grid-template-columns:minmax(155px,190px) minmax(0,1fr)}.menu-preview-panel{grid-column:1/-1;position:static}}
+      @media(max-width:900px){.section{margin:0 16px}.menus-workspace{grid-template-columns:1fr}.menu-preview-panel{grid-column:auto}}
+      @media(max-width:560px){.camera-settings-row{grid-template-columns:1fr}#setup-library .row button{white-space:normal}}
     </style>
       <nav class="section-nav" aria-label="Builder workspace"><button type="button" data-section-target="overview">Overview</button><button type="button" data-section-target="menus">Menus &amp; Content</button><button type="button" data-section-target="controls">Controls &amp; Status</button><button type="button" data-section-target="deployment">Deployment</button></nav>
       <div class="section quick-start" id="quick-start"><h3>Overview</h3><div class="hint">Choose a saved Dash, arrange its menus and controls, then apply it to an Echo.</div><ol class="quick-steps"><li><button type="button" data-section-target="overview">Choose or add a Dash</button></li><li><button type="button" data-section-target="menus">Choose menus, entities and navigation</button></li><li><button type="button" data-section-target="controls">Add clock, temperature or actions</button></li><li><button type="button" data-section-target="deployment">Save and apply to one Echo</button></li></ol><div class="readiness-grid">${readinessItems.map((item) => `<span class="readiness ${item.ok ? "ready" : "needs-attention"}">${item.ok ? "✓" : "!"} ${escapeHtml(item.label)}</span>`).join("")}</div>${dependencyIssues.length ? `<div class="dependency-warning"><strong>Missing card dependencies:</strong> ${escapeHtml(dependencyIssues.join(", "))}. Sync the Content Library after installing those cards before applying this Dash.</div>` : `<div class="hint readiness-ok">No missing card dependencies detected.</div>`}</div>
@@ -899,6 +921,8 @@ class EchoShowEditor extends HTMLElement {
     menuEditor?.insertAdjacentHTML("afterbegin", `<div class="selected-menu-heading" data-selected-menu-heading><div><span class="eyebrow">EDITING MENU</span><h4>${escapeHtml(selectedMenu?.label || "Choose a menu")}</h4><p>Configure the button and the content it shows on the Echo.</p></div><span class="editing-badge">Editing</span></div>`);
     const selectedMenuCard = menuEditor?.querySelector<HTMLDetailsElement>(`[data-menu-card="${CSS.escape(this.selectedMenuId)}"]`);
     selectedMenuCard?.insertAdjacentHTML("afterend", `<div data-included-items>${includedItemsMarkup(selectedMenu)}</div>`);
+    const includedItems = menuEditor?.querySelector<HTMLElement>("[data-included-items]");
+    if (includedItems) (selectedMenuCard?.querySelector(".content-picker") || selectedMenuCard)?.before(includedItems);
     const cardLibrarySection = root.querySelector<HTMLElement>(".custom-card-holder");
     if (menuSection && cardLibrarySection) menuSection.after(cardLibrarySection);
     const libraryHeading = cardLibrarySection?.querySelector("summary");
@@ -1009,7 +1033,10 @@ class EchoShowEditor extends HTMLElement {
       const selectedHeading = root.querySelector<HTMLElement>("[data-selected-menu-heading] h4");
       if (selectedHeading) selectedHeading.textContent = currentMenu?.label || "Choose a menu";
       const included = root.querySelector<HTMLElement>("[data-included-items]");
-      if (included) { included.innerHTML = includedItemsMarkup(currentMenu); card?.after(included); }
+      if (included) {
+        included.innerHTML = includedItemsMarkup(currentMenu);
+        (card?.querySelector(".content-picker") || card)?.before(included);
+      }
       root.querySelectorAll<HTMLDetailsElement>("[data-menu-card]").forEach((item) => {
         item.hidden = item !== card;
         if (item !== card) item.open = false;
@@ -1502,6 +1529,8 @@ class EchoShowEditor extends HTMLElement {
       const next = { ...(this.config.camera_spans || {}) };
       next[input.dataset.span || ""] = Number(input.value);
       this.emit({ camera_spans: next }, false);
+      const preview = root.querySelector<HTMLElement>("[data-menu-preview]");
+      if (preview) preview.innerHTML = menuPreviewMarkup(this.getCurrentConfig().menus.find((menu: EchoMenuConfig) => menu.id === this.selectedMenuId));
     }));
     root.querySelectorAll<HTMLSelectElement>("[data-camera-refresh]").forEach((input) => input.addEventListener("change", () => {
       const next = { ...(this.config.camera_refresh_intervals || {}) };
