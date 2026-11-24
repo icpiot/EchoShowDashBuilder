@@ -915,6 +915,7 @@ class EchoShowEditor extends HTMLElement {
     root.querySelectorAll<HTMLButtonElement>("[data-section-target]").forEach((button) => button.addEventListener("click", () => selectPage(button.dataset.sectionTarget || "", true)));
     root.querySelectorAll<HTMLButtonElement>("[data-menu-focus]").forEach((button) => button.addEventListener("click", () => {
       const card = root.querySelector<HTMLDetailsElement>(`[data-menu-card="${CSS.escape(button.dataset.menuFocus || "")}"]`);
+      root.querySelectorAll<HTMLButtonElement>("[data-menu-focus]").forEach((item) => item.classList.toggle("selected", item === button));
       if (card) { card.open = true; card.scrollIntoView({ behavior: "smooth", block: "start" }); }
     }));
     selectPage(this.activeWorkspacePage);
