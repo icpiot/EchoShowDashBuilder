@@ -410,7 +410,26 @@ class EchoShowEditor extends HTMLElement {
   private async ensureBuilderTitle() {
     this.builderTitleChecked = true;
     const urlPath = window.location.pathname.split("/").filter(Boolean)[0];
-    if (urlPath !== "echo-show-dash-builder") return;
+    const wantedBuilderPath = "echo-show-dash-builder";
+    const legacyBuilderPath = "echo-show-html-dash-builder";
+    if (urlPath === legacyBuilderPath) {
+      try {
+        const dashboards = await this.callWS({ type: "lovelace/dashboards/list" });
+        if (!Array.isArray(dashboards)) return;
+        if (!dashboards.some((item: any) => String(item.url_path) === wantedBuilderPath)) {
+          const source = await this.callWS({ type: "lovelace/config", url_path: legacyBuilderPath });
+          await this.callWS({ type: "lovelace/dashboards/create", url_path: wantedBuilderPath, title: "Echo Show Dash Builder", show_in_sidebar: true, require_admin: false });
+          await this.callWS({ type: "lovelace/config/save", url_path: wantedBuilderPath, config: source });
+        }
+        const old = dashboards.find((item: any) => String(item.url_path) === legacyBuilderPath);
+        if (old?.id) await this.callWS({ type: "lovelace/dashboards/delete", dashboard_id: old.id });
+        window.location.assign(`/${wantedBuilderPath}/home`);
+      } catch {
+        // The manual move control remains available if this session cannot delete dashboards.
+      }
+      return;
+    }
+    if (urlPath !== wantedBuilderPath) return;
     const title = "Echo Show Dash Builder";
     try {
       const dashboards = await this.callWS({ type: "lovelace/dashboards/list" });
