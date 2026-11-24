@@ -797,17 +797,22 @@ class EchoShowEditor extends HTMLElement {
     const selectedMenu = menuProfiles.find((menu) => menu.id === this.selectedMenuId) || menuProfiles[0];
     if (selectedMenu) this.selectedMenuId = selectedMenu.id;
     const menuWorkspaceList = `<aside class="menu-workspace-list"><div class="panel-heading"><div><span class="eyebrow">STRUCTURE</span><h4>Dashboard menus <em>${menuProfiles.length}</em></h4></div></div><p class="hint">Choose a menu to edit its content.</p><ol>${menuProfiles.map((menu, index) => `<li><button type="button" data-menu-focus="${escapeHtml(menu.id)}" class="${menu.id === this.selectedMenuId ? "selected" : ""}" ${menu.id === this.selectedMenuId ? 'aria-current="true"' : ""}><span class="menu-number">${index + 1}</span><span class="menu-list-copy"><strong>${escapeHtml(menu.label)}</strong><small>${menu.action === "navigate" ? "Navigation" : menu.source === "lovelace_card" ? `${menu.lovelace_card_ids?.length || 0} cards` : `${(menu.cameras?.length || 0) + (menu.lights?.length || 0) + (menu.temperatures?.length || 0)} items`}</small></span></button></li>`).join("")}</ol><button type="button" id="add-menu" class="secondary-action">＋ Add menu</button></aside>`;
+    const orderedMenuCameras = (menu?: EchoMenuConfig) => [...(menu?.cameras || [])].sort((a, b) => {
+      const aIndex = cameraOrder.indexOf(a);
+      const bIndex = cameraOrder.indexOf(b);
+      return (aIndex < 0 ? Number.MAX_SAFE_INTEGER : aIndex) - (bIndex < 0 ? Number.MAX_SAFE_INTEGER : bIndex);
+    });
     const menuPreviewMarkup = (menu?: EchoMenuConfig) => {
-      const selectedCameras = [...(menu?.cameras || [])].sort((a, b) => cameraOrder.indexOf(a) - cameraOrder.indexOf(b));
+      const selectedCameras = orderedMenuCameras(menu).filter((id) => cameras.some((camera) => camera.entityId === id));
       const tiles = menu?.action === "navigate" ? [{ label: "Opens another dashboard", span: 2 }] : menu?.source === "lovelace_card"
         ? (menu.lovelace_card_ids || []).map((id) => ({ label: cardLibrary.find((card) => card.id === id)?.name || id, span: 1 }))
         : [...selectedCameras.map((id) => ({ label: cameras.find((camera) => camera.entityId === id)?.label || id, span: Math.max(1, Math.min(2, Number(this.config.camera_spans?.[id]) || 1)) })), ...(menu?.lights || []).map((id) => ({ label: String(this._hass?.states[id]?.attributes?.friendly_name || id), span: 1 })), ...(menu?.temperatures || []).map((id) => ({ label: String(this._hass?.states[id]?.attributes?.friendly_name || id), span: 1 }))];
-      return `<div class="echo-preview-screen"><div class="echo-preview-nav">${menuProfiles.slice(0, 5).map((item) => `<span class="${item.id === menu?.id ? "active" : ""}">${escapeHtml(item.label)}</span>`).join("")}</div><div class="echo-preview-content"><strong>${escapeHtml(menu?.label || "No menu selected")}</strong><div class="echo-preview-tiles">${tiles.slice(0, 6).map((tile) => `<span class="${tile.span > 1 ? "wide" : ""}">${escapeHtml(tile.label)}</span>`).join("") || `<span>No content selected</span>`}</div>${tiles.length > 6 ? `<small>+${tiles.length - 6} more</small>` : ""}</div></div>`;
+      return `<div class="echo-preview-screen"><div class="echo-preview-nav">${menuProfiles.slice(0, 5).map((item) => `<span class="${item.id === menu?.id ? "active" : ""}">${escapeHtml(item.label)}</span>`).join("")}</div><div class="echo-preview-content"><strong>${escapeHtml(menu?.label || "No menu selected")}</strong><div class="echo-preview-tiles">${tiles.slice(0, 4).map((tile) => `<span class="${tile.span > 1 ? "wide" : ""}">${escapeHtml(tile.label)}</span>`).join("") || `<span>No content selected</span>`}</div>${tiles.length > 4 ? `<small>+${tiles.length - 4} more</small>` : ""}</div></div>`;
     };
     const includedItemsMarkup = (menu?: EchoMenuConfig) => {
-      const ids = menu?.source === "lovelace_card" ? menu.lovelace_card_ids || [] : [...(menu?.cameras || [])].sort((a, b) => cameraOrder.indexOf(a) - cameraOrder.indexOf(b)).concat(menu?.lights || [], menu?.temperatures || []);
+      const ids = menu?.source === "lovelace_card" ? menu.lovelace_card_ids || [] : orderedMenuCameras(menu).concat(menu?.lights || [], menu?.temperatures || []);
       const labelFor = (id: string) => cardLibrary.find((card) => card.id === id)?.name || cameras.find((camera) => camera.entityId === id)?.label || String(this._hass?.states[id]?.attributes?.friendly_name || id);
-      return `<div class="included-items-panel"><div class="panel-heading"><div><span class="eyebrow">CONTENT</span><h4>Included items <em>${ids.length}</em></h4></div></div>${ids.length ? `<ol>${ids.slice(0, 8).map((id, index) => `<li><span class="item-order">${index + 1}</span><strong>${escapeHtml(labelFor(id))}</strong><small>${id.startsWith("camera.") ? "Camera" : id.startsWith("light.") ? "Light" : id.startsWith("sensor.") ? "Sensor" : "Card"}</small></li>`).join("")}</ol>${ids.length > 8 ? `<div class="hint">+${ids.length - 8} more items</div>` : ""}` : `<p class="hint">Choose content for this menu in the editor above.</p>`}</div>`;
+      return `<div class="included-items-panel"><div class="panel-heading"><div><span class="eyebrow">CONTENT</span><h4>Included items <em>${ids.length}</em></h4></div></div>${ids.length ? `<ol>${ids.slice(0, 12).map((id, index) => `<li><span class="item-order">${index + 1}</span><strong>${escapeHtml(labelFor(id))}</strong><small>${id.startsWith("camera.") ? cameras.some((camera) => camera.entityId === id) ? "Camera" : "Unavailable camera" : id.startsWith("light.") ? "Light" : id.startsWith("sensor.") ? "Sensor" : "Card"}</small></li>`).join("")}</ol>${ids.length > 12 ? `<div class="hint">+${ids.length - 12} more items</div>` : ""}` : `<p class="hint">Choose content for this menu in the editor above.</p>`}</div>`;
     };
     const managedPreview = this.managedDashboards.find((dashboard) => dashboard.target === selectedTarget);
     root.innerHTML = `<style>
@@ -898,6 +903,18 @@ class EchoShowEditor extends HTMLElement {
       #menu-controls .toggle-config select{width:100%}
       @media(max-width:900px){.quick-steps{grid-template-columns:repeat(5,minmax(0,1fr))}}
       @media(max-width:560px){.quick-steps{grid-template-columns:1fr}.quick-steps li:not(:last-child)::after{display:none}}
+      .echo-preview-screen{aspect-ratio:16/10;min-height:0;box-sizing:border-box;display:flex;flex-direction:column}
+      .echo-preview-nav{flex:none;padding:5px 6px}
+      .echo-preview-nav span{padding:4px 2px}
+      .echo-preview-content{min-height:0;flex:1;padding:8px;overflow:hidden}
+      .echo-preview-content>strong{font-size:.78rem}
+      .echo-preview-tiles{gap:4px;margin-top:5px}
+      .echo-preview-tiles span{min-height:20px;padding:3px;font-size:.58rem}
+      .echo-preview-content small{margin-top:4px;font-size:.62rem}
+      .deployment-device-screen{aspect-ratio:16/10;min-height:0;box-sizing:border-box;padding:clamp(8px,2vw,18px)}
+      .device-menu-grid{gap:7px;margin:12px 0}
+      .device-menu-grid>div{min-height:0;padding:7px}
+      @media(min-width:1101px) and (max-width:1450px){.menus-workspace{grid-template-columns:minmax(125px,145px) minmax(0,1fr) minmax(220px,235px)}}
     </style>
       <nav class="section-nav" aria-label="Builder workspace"><button type="button" data-section-target="overview">Overview</button><button type="button" data-section-target="menus">Menus &amp; Content</button><button type="button" data-section-target="controls">Controls &amp; Status</button><button type="button" data-section-target="deployment">Deployment</button></nav>
       <div class="section quick-start" id="quick-start"><h3>Overview</h3><div class="hint">Choose a saved Dash, arrange its menus and controls, then apply it to an Echo.</div><ol class="quick-steps"><li><button type="button" data-section-target="overview">Choose or add a Dash</button></li><li><button type="button" data-section-target="menus">Choose menus, entities and navigation</button></li><li><button type="button" data-section-target="controls">Add clock, temperature or actions</button></li><li><button type="button" data-section-target="deployment">Save and apply to one Echo</button></li></ol><div class="readiness-grid">${readinessItems.map((item) => `<span class="readiness ${item.ok ? "ready" : "needs-attention"}">${item.ok ? "✓" : "!"} ${escapeHtml(item.label)}</span>`).join("")}</div>${dependencyIssues.length ? `<div class="dependency-warning"><strong>Missing card dependencies:</strong> ${escapeHtml(dependencyIssues.join(", "))}. Sync the Content Library after installing those cards before applying this Dash.</div>` : `<div class="hint readiness-ok">No missing card dependencies detected.</div>`}</div>

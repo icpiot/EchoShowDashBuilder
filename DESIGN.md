@@ -44,7 +44,7 @@ Use a clear sans serif stack (`"Segoe UI", Arial, sans-serif`) without requiring
 
 **Panels and lists.** Use panels for meaningful groups, not every individual row. Menu selection is a distinct row state; editing is shown in one selected editor. Included items are ordered and visible near that editor. Dividers separate repeated rows. Empty states say what can be added next. Removal controls are visible but visually subordinate to save/apply.
 
-**Echo previews.** Show the actual configured labels, order, and spans in a compact device frame. Keep a clear distinction between a visual preview, an applied dashboard, and the physical Echo. Camera tile width in the preview follows the configured one-to-three-box setting where the preview grid permits it; do not show a two-box Street camera as a one-box tile or place it after cameras with a later order.
+**Echo previews.** The Show 8 reference uses a 16:10 landscape display (1280 × 800), so its screen guide must keep that ratio. Show the actual configured labels, order, and spans in a compact device frame. Keep a clear distinction between a visual preview, an applied dashboard, and the physical Echo. Camera tile width in the preview follows the configured one-to-three-box setting where the preview grid permits it; do not show a two-box Street camera as a one-box tile or place it after cameras with a later order. Missing camera entities stay visible in the editor as unavailable entries and do not take leading positions in the screen guide.
 
 **Status.** Readiness messages state the specific condition. Never use a green success treatment for an unverified deployment or device response. Applied history uses real saved data rather than placeholder metrics.
 
