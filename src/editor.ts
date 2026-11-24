@@ -1163,16 +1163,20 @@ class EchoShowEditor extends HTMLElement {
     const dialogConfirm = root.querySelector<HTMLButtonElement>("#builder-dialog-confirm");
     const dialogCancel = root.querySelector<HTMLButtonElement>("#builder-dialog-cancel");
     let resolveDialog: ((value: string | boolean | undefined) => void) | undefined;
+    let dialogTrigger: HTMLElement | null = null;
     const closeBuilderDialog = (value: string | boolean | undefined) => {
       if (!builderDialog) return;
       builderDialog.hidden = true;
       const resolve = resolveDialog;
       resolveDialog = undefined;
       resolve?.(value);
+      dialogTrigger?.focus();
+      dialogTrigger = null;
     };
     const openBuilderDialog = (options: { title: string; message: string; kind: "name" | "confirm"; initial?: string; confirmLabel?: string }) => new Promise<string | boolean | undefined>((resolve) => {
       if (!builderDialog || !dialogTitle || !dialogMessage || !dialogConfirm || !dialogInput || !dialogInputLabel) { resolve(undefined); return; }
       resolveDialog = resolve;
+      dialogTrigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
       dialogTitle.textContent = options.title;
       dialogMessage.textContent = options.message;
       dialogConfirm.textContent = options.confirmLabel || (options.kind === "name" ? "Continue" : "Confirm");
@@ -1184,17 +1188,38 @@ class EchoShowEditor extends HTMLElement {
       (options.kind === "name" ? dialogInput : dialogConfirm).focus();
     });
     dialogCancel?.addEventListener("click", () => closeBuilderDialog(undefined));
-    dialogConfirm?.addEventListener("click", () => closeBuilderDialog(dialogInput?.hidden ? true : dialogInput?.value.trim() || undefined));
+    dialogConfirm?.addEventListener("click", () => {
+      if (dialogInput && !dialogInput.hidden) {
+        const value = dialogInput.value.trim();
+        if (!value) { if (dialogError) dialogError.textContent = "Enter a name to continue."; dialogInput.focus(); return; }
+        if (savedProfiles.some((profile) => profile.name.localeCompare(value, undefined, { sensitivity: "accent" }) === 0)) {
+          if (dialogError) dialogError.textContent = `A Dash named “${value}” already exists. Names must be unique.`;
+          dialogInput.focus();
+          return;
+        }
+        closeBuilderDialog(value);
+        return;
+      }
+      closeBuilderDialog(true);
+    });
     builderDialog?.addEventListener("click", (event) => { if (event.target === builderDialog) closeBuilderDialog(undefined); });
-    builderDialog?.addEventListener("keydown", (event) => { if (event.key === "Escape") { event.preventDefault(); closeBuilderDialog(undefined); } else if (event.key === "Enter" && document.activeElement === dialogInput) { event.preventDefault(); dialogConfirm?.click(); } });
+    builderDialog?.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") { event.preventDefault(); closeBuilderDialog(undefined); return; }
+      if (event.key === "Tab") {
+        const focusables: HTMLElement[] = [dialogInput, dialogCancel, dialogConfirm].filter((item): item is HTMLInputElement | HTMLButtonElement => Boolean(item && !item.hidden && !item.disabled));
+        if (!focusables.length) return;
+        const active = this.shadowRoot?.activeElement || document.activeElement;
+        const index = focusables.indexOf(active as HTMLElement);
+        const next = focusables[(index + (event.shiftKey ? -1 : 1) + focusables.length) % focusables.length];
+        event.preventDefault();
+        next?.focus();
+        return;
+      }
+      if (event.key === "Enter" && (event.target === dialogInput || this.shadowRoot?.activeElement === dialogInput)) { event.preventDefault(); dialogConfirm?.click(); }
+    });
     const requestDashName = async (title: string, message: string): Promise<string | undefined> => {
       const result = await openBuilderDialog({ title, message, kind: "name", confirmLabel: "Use name" });
       if (typeof result !== "string" || !result) return undefined;
-      if (savedProfiles.some((profile) => profile.name.localeCompare(result, undefined, { sensitivity: "accent" }) === 0)) {
-        const status = root.querySelector<HTMLElement>("#dash-library-status");
-        if (status) status.textContent = `A Dash named “${result}” already exists. Names must be unique.`;
-        return undefined;
-      }
       return result;
     };
     root.querySelector<HTMLButtonElement>("#add-profile")?.addEventListener("click", async () => {
