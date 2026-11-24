@@ -863,7 +863,14 @@ class EchoShowEditor extends HTMLElement {
       if (label?.firstChild?.nodeType === Node.TEXT_NODE) label.firstChild.textContent = "Content alignment ";
     });
     root.querySelectorAll<HTMLButtonElement>("[data-section-target]").forEach((button) => button.addEventListener("click", () => {
-      root.querySelector<HTMLElement>(`#${button.dataset.sectionTarget || ""}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+      const targetId = button.dataset.sectionTarget || "";
+      const target = root.querySelector<HTMLElement>(`#${targetId}`);
+      if (!target) return;
+      // The section navigator behaves like pages after the user chooses a section,
+      // while the initial view remains a complete overview for backwards compatibility.
+      root.querySelectorAll<HTMLElement>(".section").forEach((section) => { section.hidden = section.id !== targetId; });
+      root.querySelectorAll<HTMLButtonElement>("[data-section-target]").forEach((item) => item.classList.toggle("active", item.dataset.sectionTarget === targetId));
+      target.scrollIntoView({ behavior: "smooth", block: "start" });
     }));
     root.querySelectorAll<HTMLButtonElement>("[data-delete-managed]").forEach((button) => button.addEventListener("click", async () => {
       const dashboard = this.managedDashboards.find((item) => item.id === button.dataset.deleteManaged);
