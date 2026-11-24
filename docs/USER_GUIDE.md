@@ -1,6 +1,6 @@
-# Echo Show HTML Dash — user guide
+# Echo Show Dash Builder — user guide
 
-The **Echo Show Dash HTML Builder** is the editable master dashboard. It stores named Dash setups. Applying one creates a dashboard for the selected Echo; editing the saved setup later does not change that Echo until you apply it again.
+The **Echo Show Dash Builder** is the editable master dashboard. It stores named Dash setups. Applying one creates a dashboard for the selected Echo; editing the saved setup later does not change that Echo until you apply it again.
 
 Before starting, check the [requirements and installation status](../README.md#what-you-need). The steps below assume the builder is already available in Home Assistant.
 
@@ -10,7 +10,7 @@ The control pictures are diagrams, so they contain no private Home Assistant sid
 
 ## 1. Choose or create a Dash
 
-1. Open Home Assistant on a computer and select **Echo Show Dash HTML Builder**.
+1. Open Home Assistant on a computer and select **Echo Show Dash Builder**.
 2. Under **Dash Library**, choose a saved **Dash name** to load its settings.
 3. Press **Add Dash** for a blank setup, or **Copy Dash** to start with the selected Dash's settings. Give it a unique name when prompted. Names are permanent keys; make a copy if you need a different name.
 4. **Delete Dash** removes a saved setup from the library. Use it only when you no longer want to edit or apply that setup.

@@ -17,7 +17,7 @@ The editor reads the dashboard-to-show options before allowing an assignment. Th
 - Al Office Echo 8: `select.al_office_echo_8_dashboard`, `select.al_office_echo_8_dashboard_to_show`, `switch.al_office_echo_8_dashboard_when_idle`
 - Al Show 5: `select.al_show_5_dashboard`, `select.al_show_5_dashboard_to_show`, `switch.al_show_5_dashboard_when_idle`
 
-At discovery time, the Echo 8 exposed `Echo Show HTML Dash Dev` in its dashboard list. The Show 5 exposed only `Automatic`, so the development dashboard cannot be assigned to that device through the verified interface until TECHO5 exposes the dashboard option.
+At discovery time, the Echo 8 exposed `Echo Show Dash Builder Dev` in its dashboard list. The Show 5 exposed only `Automatic`, so the development dashboard cannot be assigned to that device through the verified interface until TECHO5 exposes the dashboard option.
 
 ## Safety and rollback
 

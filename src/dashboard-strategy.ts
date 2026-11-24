@@ -174,9 +174,9 @@ export function generateEchoDashboard(config: EchoDashboardConfig, hass: HomeAss
   // are therefore the only workflow controls the user sees.
   if (config.echo_managed === false) {
     return {
-      title: config.title || "Echo Show Dash HTML Builder",
+      title: config.title || "Echo Show Dash Builder",
       views: [{
-        title: config.title || "Echo Show Dash HTML Builder",
+        title: config.title || "Echo Show Dash Builder",
         path: "home",
         type: "panel",
         // Put the card type last: the stored strategy also has a `type` field
@@ -362,9 +362,9 @@ export function registerEchoDashboardStrategy(): void {
   const strategy = {
     type: "echo-show",
     strategyType: "dashboard",
-    name: "Echo Show HTML Dash",
+    name: "Echo Show Dash Builder",
     description: "A responsive Echo Show dashboard with cameras, lights, and temperature readings.",
-    documentationURL: "https://github.com/echo-show-html-dash/echo-show-html-dash",
+    documentationURL: "https://github.com/icpiot/EchoShowDashBuilder",
     configRequired: true,
   };
   window.customStrategies = window.customStrategies || [];

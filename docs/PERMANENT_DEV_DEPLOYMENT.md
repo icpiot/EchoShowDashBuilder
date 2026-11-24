@@ -11,7 +11,7 @@ development project:
 `/local/echo-dashboard-card-dev.js?v=<first-eight-characters-of-bundle-SHA256>`
 
 Update that existing resource's URL after each changed bundle; do not add another
-EchoShowHTMLDash resource. Keep older files in `/config/www/` only as rollback
+Echo Show Dash Builder resource. Keep older files in `/config/www/` only as rollback
 artifacts, and do not register them. Reload the development dashboard in a
 fresh browser context after changing the resource URL.
 

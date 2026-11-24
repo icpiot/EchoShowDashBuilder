@@ -1,10 +1,10 @@
-# Echo Show HTML Dash
+# Echo Show Dash Builder
 
 ## Why we built it
 
 This project began with cameras. Existing Home Assistant camera cards did not work reliably on our Echo Show: feeds had connection problems, and the camera wall was difficult to use on its small screen. We wanted a camera view designed for the Echo, where we could choose the feeds, control their size and refresh, and tap a tile to open the Echo's native camera viewer.
 
-That camera view grew into a dashboard builder. A single, editable **Echo Show Dash HTML Builder** holds named Dash setups. You can put cameras, lights, temperatures, and existing Lovelace cards into menus, add controls to the top bar, and choose whether content fits the screen or scrolls below the menu. Save a setup in the builder, then apply it to a selected Echo. Applying it creates or replaces that Echo's dashboard; the builder remains available for later changes.
+That camera view grew into a dashboard builder. A single, editable **Echo Show Dash Builder** holds named Dash setups. You can put cameras, lights, temperatures, and existing Lovelace cards into menus, add controls to the top bar, and choose whether content fits the screen or scrolls below the menu. Save a setup in the builder, then apply it to a selected Echo. Applying it creates or replaces that Echo's dashboard; the builder remains available for later changes.
 
 ![A real Echo Show 8 camera wall, with a person redacted](docs/images/show-8-cameras.png)
 
@@ -27,4 +27,4 @@ Node.js and the packages in `package.json` are needed only by a developer buildi
 
 ## Install
 
-Install the **Echo Show HTML Dash** dashboard plugin through HACS or Home Assistant Marketplace. The [installation guide](docs/INSTALLATION.md) covers the first launch and the required TECHO5 and Dashcast setup. The [developer setup](docs/DEVELOPER_SETUP.md) is only for people changing the source code.
+Install the **Echo Show Dash Builder** dashboard plugin through HACS or Home Assistant Marketplace. The [installation guide](docs/INSTALLATION.md) covers the first launch and the required TECHO5 and Dashcast setup. The [developer setup](docs/DEVELOPER_SETUP.md) is only for people changing the source code.

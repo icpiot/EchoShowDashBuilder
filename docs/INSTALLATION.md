@@ -15,12 +15,12 @@ This is the user installation path. You do not need Node.js, npm, TypeScript or 
 The first release is available immediately as a custom repository. It can be added to the public HACS/Marketplace catalog later after community review.
 
 1. Open **HACS → Frontend**, open the three-dot menu, and choose **Custom repositories**.
-2. Enter `https://github.com/icpiot/EchoShowHTMLDash` and choose **Dashboard** as the type.
-3. Open the new **Echo Show HTML Dash** entry and choose **Download/Install**.
+2. Enter `https://github.com/icpiot/EchoShowDashBuilder` and choose **Dashboard** as the type.
+3. Open the new **Echo Show Dash Builder** entry and choose **Download/Install**.
 4. Reload the Home Assistant browser page when prompted.
 5. Open **Settings → Dashboards → Add dashboard**.
-6. Choose **Echo Show HTML Dash** under the community dashboard strategies.
-7. Name the dashboard **Echo Show Dash HTML Builder** and create it.
+6. Choose **Echo Show Dash Builder** under the community dashboard strategies.
+7. Name the dashboard **Echo Show Dash Builder** and create it.
 
 On Home Assistant versions with Marketplace, use **Settings → Marketplace → Dashboard** and add the same repository if it is not already listed.
 

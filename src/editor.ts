@@ -410,8 +410,8 @@ class EchoShowEditor extends HTMLElement {
   private async ensureBuilderTitle() {
     this.builderTitleChecked = true;
     const urlPath = window.location.pathname.split("/").filter(Boolean)[0];
-    if (urlPath !== "echo-show-html-dash-builder") return;
-    const title = "Echo Show Dash HTML Builder";
+    if (urlPath !== "echo-show-dash-builder") return;
+    const title = "Echo Show Dash Builder";
     try {
       const dashboards = await this.callWS({ type: "lovelace/dashboards/list" });
       const dashboard = Array.isArray(dashboards) ? dashboards.find((item: any) => String(item.url_path) === urlPath) : undefined;
@@ -518,7 +518,7 @@ class EchoShowEditor extends HTMLElement {
       const dashboards = await this.callWS({ type: "lovelace/dashboards/list" });
       const listed = Array.isArray(dashboards) ? dashboards : [];
       this.standardDashboards = [{ title: "Overview", url_path: "lovelace" }, ...listed
-        .filter((dashboard: any) => dashboard?.url_path && String(dashboard.url_path) !== "echo-show-html-dash-builder")
+        .filter((dashboard: any) => dashboard?.url_path && String(dashboard.url_path) !== "echo-show-dash-builder")
         .map((dashboard: any) => ({ title: String(dashboard.title || dashboard.url_path), url_path: String(dashboard.url_path) }))]
         .filter((dashboard, index, array) => array.findIndex((item) => item.title === dashboard.title) === index)
         .sort((a, b) => a.title.localeCompare(b.title));
@@ -698,7 +698,7 @@ class EchoShowEditor extends HTMLElement {
       : Boolean(this.config.echo_dashboard_when_idle);
     const selectedKioskMode = kioskModeSetting(this.config.kiosk_mode, this.config.echo_managed ? "enabled" : "inherit");
     const builderPath = window.location.pathname.split("/").filter(Boolean)[0] || "";
-    const wantedBuilderPath = "echo-show-html-dash-builder";
+    const wantedBuilderPath = "echo-show-dash-builder";
     const cardLibrary: EchoCardLibraryEntry[] = Array.isArray(this.config.card_library) ? this.config.card_library : [];
     const toggleEditors = menuToggles.map((toggle) => {
       const placement = toggle.placement === "right" ? "right" : "left";
@@ -862,7 +862,7 @@ class EchoShowEditor extends HTMLElement {
         if (!Array.isArray(dashboards)) throw new Error("Home Assistant did not return the dashboard list.");
         if (dashboards.some((dashboard: any) => String(dashboard.url_path) === wantedBuilderPath)) throw new Error(`/${wantedBuilderPath} is already in use.`);
         const source = await this.callWS({ type: "lovelace/config", url_path: builderPath });
-        const created = await this.callWS({ type: "lovelace/dashboards/create", url_path: wantedBuilderPath, title: "Echo Show Dash HTML Builder", show_in_sidebar: true, require_admin: false });
+        const created = await this.callWS({ type: "lovelace/dashboards/create", url_path: wantedBuilderPath, title: "Echo Show Dash Builder", show_in_sidebar: true, require_admin: false });
         await this.callWS({ type: "lovelace/config/save", url_path: wantedBuilderPath, config: source });
         const old = dashboards.find((dashboard: any) => String(dashboard.url_path) === builderPath);
         if (old?.id) await this.callWS({ type: "lovelace/dashboards/delete", dashboard_id: old.id });

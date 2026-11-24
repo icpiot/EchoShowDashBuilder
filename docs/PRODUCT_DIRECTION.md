@@ -1,4 +1,4 @@
-# Echo Show HTML Dash — product direction
+# Echo Show Dash Builder — product direction
 
 This document records the requirements agreed in conversation on 7 November 2026. The original `echo-dashboard-custom-card-brief.md` remains the prototype and implementation reference. Where it assumes a different product shape, this document takes precedence until the brief is revised.
 

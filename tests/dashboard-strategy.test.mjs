@@ -114,7 +114,7 @@ test("keeps the menu fixed while allowing selected content to scroll", () => {
 });
 
 test("renders the non-managed master as a standalone builder", () => {
-  const dashboard = generateEchoDashboard({ title: "Echo Show Dash HTML Builder", echo_managed: false, menus: [] }, hass);
+  const dashboard = generateEchoDashboard({ title: "Echo Show Dash Builder", echo_managed: false, menus: [] }, hass);
   assert.equal(dashboard.views[0].cards[0].type, "custom:echo-show-editor");
   assert.equal(dashboard.views[0].type, "panel");
 });
