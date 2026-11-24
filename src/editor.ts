@@ -230,6 +230,7 @@ class EchoShowEditor extends HTMLElement {
   private mdiIconLoad?: Promise<string[]>;
   private builderTitleChecked = false;
   private hasUnsavedChanges = false;
+  private activeWorkspacePage = "overview";
   /** Prevent Home Assistant's echo of a normal Save Dash from redrawing this editor. */
   private preserveEditorOnNextConfig = false;
   setConfig(config: any) {
@@ -795,7 +796,8 @@ class EchoShowEditor extends HTMLElement {
     root.innerHTML = `<style>
       :host{display:block;font-family:Arial,sans-serif;padding:16px;box-sizing:border-box;color:var(--primary-text-color);--builder-line:var(--divider-color,rgba(127,127,127,.35))}
       .section-nav{position:sticky;top:8px;z-index:5;float:left;width:170px;display:flex;flex-direction:column;gap:6px;margin:0 18px 18px 0;padding:8px;background:var(--card-background-color,var(--primary-background-color));border:1px solid var(--builder-line);border-radius:10px}.section-nav button{text-align:left;padding:9px 10px;border:1px solid transparent;border-radius:7px;background:transparent;color:inherit;cursor:pointer;font-size:.9em}.section-nav button:hover,.section-nav button:focus{border-color:var(--primary-color,#03a9f4);background:color-mix(in srgb,var(--primary-color,#03a9f4) 9%,transparent);outline:none}.section{margin-left:200px}.quick-start{border:1px solid var(--builder-line);border-radius:10px}.quick-steps{display:flex;gap:8px;flex-wrap:wrap;padding-left:24px}.quick-steps button{padding:7px 9px;border:1px solid var(--builder-line);border-radius:7px;background:var(--card-background-color,var(--primary-background-color));color:inherit;cursor:pointer}.readiness-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:6px;margin-top:10px}.readiness{padding:7px 9px;border-radius:7px;font-size:.88em}.readiness.ready{background:color-mix(in srgb,#2e9d5b 14%,transparent);color:#19733d}.readiness.needs-attention{background:color-mix(in srgb,#f39c12 15%,transparent);color:#8a5500}.dependency-warning{margin-top:10px;padding:9px 10px;border-left:3px solid #f39c12;background:color-mix(in srgb,#f39c12 10%,transparent)}@media(max-width:700px){.section-nav{float:none;width:auto;position:sticky;top:0;flex-direction:row;overflow:auto;margin:0 0 10px;border-radius:0}.section-nav button{white-space:nowrap}.section{margin-left:0}.quick-steps{display:block}.quick-steps li{margin:6px 0}}
-      .section{margin:0;padding:22px 0 24px;border-top:2px solid var(--builder-line)}.section:first-of-type{border-top:0;padding-top:4px}
+      .section{margin-left:200px;padding:22px 0 24px;border-top:2px solid var(--builder-line)}.section:first-of-type{border-top:0;padding-top:4px}.section[hidden]{display:none}.section-nav button.active{background:color-mix(in srgb,var(--primary-color,#6750d8) 15%,transparent);color:var(--primary-color,#6750d8);font-weight:700}.overview-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin:12px 0 18px}.overview-card{padding:16px;border:1px solid var(--builder-line);border-radius:12px;background:var(--card-background-color,var(--primary-background-color));min-width:0}.overview-card span{font-size:.8em;opacity:.72}.overview-card strong{display:block;margin-top:6px;font-size:1.05em;overflow-wrap:anywhere}.quick-start{background:color-mix(in srgb,var(--primary-color,#6750d8) 3%,var(--card-background-color,var(--primary-background-color)))}@media(max-width:700px){.section{margin-left:0}}
+      .overview-panels{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px;margin-top:18px}.overview-panel{padding:14px;border:1px solid var(--builder-line);border-radius:10px;background:var(--card-background-color,var(--primary-background-color))}.overview-panel-heading{display:flex;justify-content:space-between;align-items:center;gap:8px}.overview-panel h4{margin:0}.overview-panel ul{list-style:none;margin:10px 0 0;padding:0}.overview-panel li{display:flex;justify-content:space-between;gap:10px;padding:9px 2px;border-top:1px solid var(--builder-line)}.overview-panel small{opacity:.7;white-space:nowrap}.overview-panel button{cursor:pointer}
       .section h3{margin:0 0 10px;font-size:1.18rem;line-height:1.3}
       details.custom-card-holder{padding-bottom:0}details.custom-card-holder>summary{display:flex;align-items:center;justify-content:space-between;cursor:pointer;font-size:1.18rem;font-weight:700;list-style:none}details.custom-card-holder>summary::-webkit-details-marker{display:none}details.custom-card-holder>summary::after{content:"⌄";font-size:1.1em}details.custom-card-holder:not([open])>summary::after{content:"›"}details.custom-card-holder>.holder-content{padding-top:14px}
       .row{display:flex;gap:8px;align-items:end;margin:8px 0;flex-wrap:wrap}
@@ -818,8 +820,8 @@ class EchoShowEditor extends HTMLElement {
       .deployment-actions{align-items:center;min-height:42px}.deployment-actions .action-feedback{flex:1 1 300px;min-height:20px;margin:0;display:flex;align-items:center}.deployment-actions .action-feedback:empty{visibility:hidden}#managed-delete-status{display:block;margin:8px 0}
       .save-explainer{padding:9px 10px;border-left:3px solid var(--primary-color,#03a9f4);background:color-mix(in srgb,var(--primary-color,#03a9f4) 7%,transparent);font-size:.92em;line-height:1.4}.menu-summary{opacity:.75;font-weight:400;font-size:.9em;margin-left:8px}.visual-layout{margin:10px 0;padding:12px;border:1px solid var(--builder-line);border-radius:8px;background:color-mix(in srgb,var(--primary-color,#03a9f4) 5%,transparent)}.visual-layout p{margin:4px 0 10px}.visual-layout-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-auto-rows:58px;gap:6px;min-height:64px;padding:6px;border:1px dashed var(--builder-line);background:var(--card-background-color,var(--primary-background-color));border-radius:6px}.visual-layout-item{grid-column:span 1;grid-row:span 1;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:2px;padding:5px;border:2px solid var(--primary-color,#03a9f4);border-radius:6px;background:color-mix(in srgb,var(--primary-color,#03a9f4) 15%,transparent);cursor:grab;user-select:none;min-width:0}.visual-layout-item.span-2{grid-column:span 2}.visual-layout-item.span-3{grid-column:span 3}.visual-layout-item.row-2{grid-row:span 2}.visual-layout-item:active{cursor:grabbing}.visual-layout-name{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}.visual-layout-size{font-size:.75em;opacity:.75}.visual-layout-actions{display:flex;gap:3px}.visual-layout-actions button{min-width:22px;height:22px;padding:0;line-height:1}.visual-layout-actions button:nth-child(3){margin-left:5px}@media(max-width:600px){.section-nav{margin:0 -4px}.section-nav a{font-size:.8em}.row>label{flex-basis:100%}.visual-layout-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
     </style>
-      <nav class="section-nav" aria-label="Builder sections"><button type="button" data-section-target="quick-start">Quick start</button><button type="button" data-section-target="setup-library">Dash Library</button><button type="button" data-section-target="dashboard-content">Menus &amp; navigation</button><button type="button" data-section-target="menu-controls">Status &amp; actions</button><button type="button" data-section-target="echo-deployment">Apply to Echo</button></nav>
-      <div class="section quick-start" id="quick-start"><h3>Quick start</h3><div class="hint">Build a Dash in five simple steps. The detailed sections below use the same saved configuration, so you can switch between this guided view and the advanced settings at any time.</div><ol class="quick-steps"><li><button type="button" data-section-target="setup-library">Choose or add a Dash</button></li><li><button type="button" data-section-target="dashboard-content">Choose menus, entities and navigation</button></li><li><button type="button" data-section-target="menu-controls">Add clock, temperature or actions</button></li><li><button type="button" data-section-target="echo-deployment">Save and apply to one Echo</button></li></ol><div class="readiness-grid">${readinessItems.map((item) => `<span class="readiness ${item.ok ? "ready" : "needs-attention"}">${item.ok ? "✓" : "!"} ${escapeHtml(item.label)}</span>`).join("")}</div>${dependencyIssues.length ? `<div class="dependency-warning"><strong>Missing card dependencies:</strong> ${escapeHtml(dependencyIssues.join(", "))}. Sync the Custom Card Holder after installing those cards before applying this Dash.</div>` : `<div class="hint readiness-ok">No missing card dependencies detected.</div>`}</div>
+      <nav class="section-nav" aria-label="Builder workspace"><button type="button" data-section-target="overview">Overview</button><button type="button" data-section-target="menus">Menus &amp; Content</button><button type="button" data-section-target="controls">Controls &amp; Status</button><button type="button" data-section-target="deployment">Deployment</button></nav>
+      <div class="section quick-start" id="quick-start"><h3>Overview</h3><div class="hint">Choose a saved Dash, arrange its menus and controls, then apply it to an Echo.</div><ol class="quick-steps"><li><button type="button" data-section-target="overview">Choose or add a Dash</button></li><li><button type="button" data-section-target="menus">Choose menus, entities and navigation</button></li><li><button type="button" data-section-target="controls">Add clock, temperature or actions</button></li><li><button type="button" data-section-target="deployment">Save and apply to one Echo</button></li></ol><div class="readiness-grid">${readinessItems.map((item) => `<span class="readiness ${item.ok ? "ready" : "needs-attention"}">${item.ok ? "✓" : "!"} ${escapeHtml(item.label)}</span>`).join("")}</div>${dependencyIssues.length ? `<div class="dependency-warning"><strong>Missing card dependencies:</strong> ${escapeHtml(dependencyIssues.join(", "))}. Sync the Content Library after installing those cards before applying this Dash.</div>` : `<div class="hint readiness-ok">No missing card dependencies detected.</div>`}</div>
       ${builderPath !== wantedBuilderPath ? `<div class="section"><h3>Builder dashboard address</h3><div class="hint">Move this master builder to /${wantedBuilderPath}. Its saved setups and preview are kept; Echo dashboards are not changed.</div><button id="move-builder-path" type="button">Use builder address</button><div id="move-builder-status" class="hint" aria-live="polite"></div></div>` : ""}
       <div class="section" id="setup-library"><h3>Dash Library (${savedProfiles.length})</h3><div class="hint">A Dash name is permanent. Select it to edit its own settings, add a blank Dash, or copy the selected Dash under a new name.</div>
         <div class="row"><label for="saved-profile">Dash name</label><select id="saved-profile"><option value="">Select a Dash</option>${savedProfiles.map((profile: any) => `<option value="${escapeHtml(profile.id)}" ${profile.id === selectedProfileId ? "selected" : ""}>${escapeHtml(profile.name)}</option>`).join("")}</select></div>
@@ -839,9 +841,22 @@ class EchoShowEditor extends HTMLElement {
       </div>
       <div class="section"><h3>Echo dashboards applied from this builder</h3><div class="hint">The list shows dashboards created by this builder. Applying a new setup replaces the previous builder dashboard for that same Echo; setups saved above are kept.</div>${managedDashboardList}<div id="managed-delete-status" class="hint" aria-live="polite"></div></div>
       `;
+    const menuSection = root.querySelector<HTMLElement>("#dashboard-content");
+    const cardLibrarySection = root.querySelector<HTMLElement>(".custom-card-holder");
+    if (menuSection && cardLibrarySection) menuSection.after(cardLibrarySection);
+    const libraryHeading = cardLibrarySection?.querySelector("summary");
+    if (libraryHeading) libraryHeading.textContent = `Content Library (${cardLibrary.length})`;
+    const menuHeading = menuSection?.querySelector("h3");
+    if (menuHeading) menuHeading.textContent = `Menus & Content (${menuProfiles.length})`;
+    const controlsHeading = root.querySelector<HTMLElement>("#menu-controls h3");
+    if (controlsHeading) controlsHeading.textContent = "Controls & Status";
+    const deploymentHeading = root.querySelector<HTMLElement>("#echo-deployment h3");
+    if (deploymentHeading) deploymentHeading.textContent = "Deployment";
     const overview = root.querySelector<HTMLElement>("#quick-start");
     if (overview && !overview.querySelector(".overview-cards")) {
       overview.insertAdjacentHTML("afterbegin", `<div class="overview-cards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin:8px 0 14px"><div class="overview-card" style="padding:10px;border:1px solid var(--builder-line);border-radius:8px"><span>Dash</span><strong style="display:block;margin-top:4px">${escapeHtml(savedProfiles.find((profile: any) => profile.id === selectedProfileId)?.name || "Not selected")}</strong></div><div class="overview-card" style="padding:10px;border:1px solid var(--builder-line);border-radius:8px"><span>Echo target</span><strong style="display:block;margin-top:4px">${escapeHtml(activeTarget?.label || "Not selected")}</strong></div><div class="overview-card" style="padding:10px;border:1px solid var(--builder-line);border-radius:8px"><span>Menus</span><strong style="display:block;margin-top:4px">${menuProfiles.length}</strong></div><div class="overview-card" style="padding:10px;border:1px solid var(--builder-line);border-radius:8px"><span>Controls &amp; status</span><strong style="display:block;margin-top:4px">${menuToggles.length + menuStatuses.length}</strong></div><div class="overview-card" style="padding:10px;border:1px solid var(--builder-line);border-radius:8px"><span>Deployment</span><strong style="display:block;margin-top:4px">${selectedProfileId && selectedTarget && !dependencyIssues.length ? "Ready" : "Needs setup"}</strong></div></div>`);
+      overview.insertAdjacentHTML("beforeend", `<div class="overview-panels"><div class="overview-panel"><div class="overview-panel-heading"><h4>Dashboard structure</h4><button type="button" data-section-target="menus">Edit menus</button></div>${menuProfiles.length ? `<ul>${menuProfiles.map((menu, index) => `<li><span>${index + 1}. ${escapeHtml(menu.label)}</span><small>${menu.action === "navigate" ? "Navigation" : menu.source === "lovelace_card" ? `${menu.lovelace_card_ids?.length || 0} cards` : `${(menu.cameras?.length || 0) + (menu.lights?.length || 0) + (menu.temperatures?.length || 0)} items`}</small></li>`).join("")}</ul>` : `<p class="hint">No menus configured yet.</p>`}</div><div class="overview-panel"><div class="overview-panel-heading"><h4>Controls &amp; status</h4><button type="button" data-section-target="controls">Manage</button></div><ul><li><span>Menu-bar toggles</span><small>${menuToggles.length}</small></li><li><span>Status displays</span><small>${menuStatuses.length}</small></li></ul></div></div>`);
+      overview.querySelectorAll<HTMLElement>(".overview-cards, .overview-card, .overview-card strong").forEach((item) => item.removeAttribute("style"));
     }
     root.querySelectorAll<HTMLDetailsElement>("[data-menu-card]").forEach((card) => card.addEventListener("toggle", () => {
       const id = card.dataset.menuCard || "";
@@ -866,16 +881,34 @@ class EchoShowEditor extends HTMLElement {
       const label = select.closest("label");
       if (label?.firstChild?.nodeType === Node.TEXT_NODE) label.firstChild.textContent = "Content alignment ";
     });
-    root.querySelectorAll<HTMLButtonElement>("[data-section-target]").forEach((button) => button.addEventListener("click", () => {
-      const targetId = button.dataset.sectionTarget || "";
-      const target = root.querySelector<HTMLElement>(`#${targetId}`);
-      if (!target) return;
-      // The section navigator behaves like pages after the user chooses a section,
-      // while the initial view remains a complete overview for backwards compatibility.
-      root.querySelectorAll<HTMLElement>(".section").forEach((section) => { section.hidden = section.id !== targetId; });
-      root.querySelectorAll<HTMLButtonElement>("[data-section-target]").forEach((item) => item.classList.toggle("active", item.dataset.sectionTarget === targetId));
-      target.scrollIntoView({ behavior: "smooth", block: "start" });
-    }));
+    const pageSections: Record<string, string[]> = {
+      overview: ["quick-start", "setup-library"],
+      menus: ["dashboard-content"],
+      controls: ["menu-controls"],
+      deployment: ["echo-deployment"],
+    };
+    const selectPage = (page: string, scroll = false) => {
+      if (!pageSections[page]) return;
+      this.activeWorkspacePage = page;
+      root.querySelectorAll<HTMLElement>(".section").forEach((section) => {
+        const isLibrary = section.matches(".custom-card-holder");
+        const isManaged = Boolean(section.querySelector("#managed-delete-status"));
+        const isAddress = Boolean(section.querySelector("#move-builder-path"));
+        section.hidden = !(pageSections[page].includes(section.id) ||
+          (page === "menus" && isLibrary) ||
+          (page === "deployment" && isManaged) ||
+          (page === "overview" && isAddress));
+      });
+      root.querySelectorAll<HTMLButtonElement>(".section-nav [data-section-target]").forEach((item) => {
+        const active = item.dataset.sectionTarget === page;
+        item.classList.toggle("active", active);
+        if (active) item.setAttribute("aria-current", "page");
+        else item.removeAttribute("aria-current");
+      });
+      if (scroll) root.querySelector<HTMLElement>(`#${pageSections[page][0]}`)?.scrollIntoView({ block: "start" });
+    };
+    root.querySelectorAll<HTMLButtonElement>("[data-section-target]").forEach((button) => button.addEventListener("click", () => selectPage(button.dataset.sectionTarget || "", true)));
+    selectPage(this.activeWorkspacePage);
     root.querySelectorAll<HTMLButtonElement>("[data-delete-managed]").forEach((button) => button.addEventListener("click", async () => {
       const dashboard = this.managedDashboards.find((item) => item.id === button.dataset.deleteManaged);
       if (!dashboard || !window.confirm(`Remove the dashboard “${dashboard.title}” (${dashboard.url_path})? This does not remove the Echo device.`)) return;
