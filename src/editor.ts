@@ -844,6 +844,7 @@ class EchoShowEditor extends HTMLElement {
       #setup-library{padding:20px;margin-top:16px}#setup-library h3{font-size:1.12rem}#setup-library .row{gap:10px}#setup-library select{min-width:240px}button{font-family:inherit}button:not(.primary-action):not([data-menu-focus]){cursor:pointer}input:not([type=checkbox]):not([type=color]),select{min-height:38px;padding:7px 10px;border:1px solid #d7dcec;border-radius:8px;background:#fff;color:var(--builder-ink);box-sizing:border-box}input:focus-visible,select:focus-visible,button:focus-visible,summary:focus-visible{outline:2px solid #684fe1;outline-offset:2px}
       .menus-workspace{grid-template-columns:minmax(180px,215px) minmax(320px,1fr) minmax(235px,275px);gap:14px;margin-top:16px}.menu-workspace-list,.menu-preview-panel{padding:18px;min-width:0}.menu-workspace-list{top:18px}.panel-heading{display:flex;justify-content:space-between;align-items:center}.panel-heading h4{margin:4px 0 0;font-size:1.1rem}.panel-heading em{padding:3px 7px;margin-left:5px;border-radius:7px;background:#efecff;color:#5038ce;font-style:normal;font-size:.74rem}.menu-workspace-list .hint,.menu-preview-panel .hint{font-size:.83rem}.menu-workspace-list li+li{border-top:0}.menu-workspace-list button[data-menu-focus]{align-items:center;gap:10px;padding:10px;margin:3px 0;border-radius:9px}.menu-number{display:grid;place-items:center;width:26px;height:26px;flex:none;border-radius:7px;background:#f0effa;color:#594aa8;font-size:.82rem;font-weight:800;opacity:1}.menu-list-copy{display:grid;gap:3px}.menu-list-copy strong{font-size:.9rem}.menu-list-copy small{font-size:.72rem;color:var(--builder-muted)}.menu-workspace-list button[data-menu-focus].selected{border-left:0;padding-left:10px;background:#efecff;box-shadow:inset 3px 0 #5e43dc}.menu-workspace-list button[data-menu-focus].selected .menu-number{background:#5e43dc;color:#fff}.secondary-action{width:100%;padding:10px;border:1px dashed #9c90e4;border-radius:9px;background:#f8f7ff;color:#5038ce;font-weight:750}
       .menu-workspace-editor>.menu-config{display:block;margin-bottom:10px;background:#fff;border:1px solid #e1e5f2;border-radius:12px;box-shadow:0 5px 18px #26305a0a}.menu-config>summary{padding:15px 16px;font-weight:750}.menu-config[open]{border-color:#ab9df0}.menu-config[open]>summary{border-bottom:1px solid #e5e7f1;color:#4f35cf}.menu-config>.row,.menu-config>.hint,.menu-config>.content-picker,.menu-config>.card-picker,.menu-config>.visual-layout{margin-left:16px;margin-right:16px}.menu-secondary-settings{padding:15px 17px;background:#fff;border-radius:12px}.menu-secondary-settings>summary{color:#5542bd}.menu-preview-panel{position:sticky;top:18px}.echo-preview-screen{overflow:hidden;margin:16px 0 12px;border:9px solid #252937;border-radius:22px;min-height:240px;background:linear-gradient(135deg,#d8e9fb,#ebe8fc);box-shadow:0 12px 20px #1319312d}.echo-preview-nav{display:flex;gap:3px;padding:8px 6px;background:#283048;color:#fff}.echo-preview-nav span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;padding:5px 3px;text-align:center;font-size:.6rem;border-radius:5px}.echo-preview-nav span.active{background:#6248df}.echo-preview-content{padding:12px}.echo-preview-content>strong{font-size:.9rem}.echo-preview-tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-top:10px}.echo-preview-tiles span{display:grid;place-items:center;min-height:46px;padding:5px;border:1px solid #fff;background:#ffffffde;border-radius:7px;text-align:center;font-size:.67rem;overflow-wrap:anywhere}.echo-preview-content small{display:block;margin-top:6px;color:#59647e}.preview-note{padding:10px;border-radius:8px;background:#f1f3ff;color:#4e5980;font-size:.76rem;line-height:1.4}
+      .menu-config[hidden]{display:none}
       #menu-controls:not([hidden]){display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}#menu-controls>h3,#menu-controls>.hint{grid-column:1/-1}#menu-controls>.menu-toggles{padding:18px;min-width:0}#menu-controls h4{margin-top:0}.deployment-layout{gap:16px}.deployment-settings-panel,.deployment-publish-panel,.deployment-history-panel{padding:20px}.deployment-layout h4{font-size:1.12rem}.deployment-readiness li{font-weight:650}.deployment-actions button{padding:10px 14px;border-radius:8px}.deployment-actions #echo-create-dashboard{border:0;background:#543bd3;color:#fff;font-weight:750}.deployment-history-panel{margin-top:8px}
       @media(max-width:1380px){.menus-workspace{grid-template-columns:minmax(180px,220px) minmax(0,1fr)}.menu-preview-panel{grid-column:1/-1;position:static}.echo-preview-screen{max-width:430px}}
       @media(max-width:900px){.builder-app-header{padding:10px 16px}.header-dash-name{display:none}.section-nav{float:none;width:auto;position:sticky;top:0;z-index:10;flex-direction:row;overflow:auto;margin:0 0 16px;padding:8px;border-radius:0}.section-nav button{width:auto;white-space:nowrap}.section{margin:0 16px}.menus-workspace{grid-template-columns:1fr}.menu-workspace-list{position:static}.menu-preview-panel{grid-column:auto}#menu-controls:not([hidden]){grid-template-columns:1fr}.quick-steps{grid-template-columns:repeat(2,minmax(0,1fr))}}
@@ -874,6 +875,10 @@ class EchoShowEditor extends HTMLElement {
     root.querySelector(".section-nav")?.insertAdjacentHTML("beforebegin", `<header class="builder-app-header"><div class="brand-mark" aria-hidden="true"><span></span><span></span></div><div class="brand-copy"><strong>Echo Dash Builder</strong><small>Dashboard workspace</small></div><div class="header-spacer"></div><span class="header-dash-name">${escapeHtml(savedProfiles.find((profile) => profile.id === selectedProfileId)?.name || "Choose a Dash")}</span><button type="button" data-section-target="deployment" class="primary-action">Apply to Echo <span aria-hidden="true">↗</span></button></header>`);
     const menuSection = root.querySelector<HTMLElement>("#dashboard-content");
     menuSection?.querySelector(".menus-workspace")?.insertAdjacentHTML("beforeend", `<aside class="menu-preview-panel"><div class="panel-heading"><div><span class="eyebrow">PREVIEW</span><h4>Menu layout</h4></div></div><p class="hint">A layout guide for the selected menu.</p><div data-menu-preview>${menuPreviewMarkup(selectedMenu)}</div><div class="preview-note">The Echo uses the selected device and its available entities when this Dash is applied.</div></aside>`);
+    menuSection?.querySelectorAll<HTMLDetailsElement>("[data-menu-card]").forEach((card) => {
+      card.hidden = card.dataset.menuCard !== this.selectedMenuId;
+      if (!card.hidden) card.open = true;
+    });
     const cardLibrarySection = root.querySelector<HTMLElement>(".custom-card-holder");
     if (menuSection && cardLibrarySection) menuSection.after(cardLibrarySection);
     const libraryHeading = cardLibrarySection?.querySelector("summary");
@@ -951,6 +956,10 @@ class EchoShowEditor extends HTMLElement {
       });
       const preview = root.querySelector<HTMLElement>("[data-menu-preview]");
       if (preview) preview.innerHTML = menuPreviewMarkup(menuProfiles.find((menu) => menu.id === this.selectedMenuId));
+      root.querySelectorAll<HTMLDetailsElement>("[data-menu-card]").forEach((item) => {
+        item.hidden = item !== card;
+        if (item !== card) item.open = false;
+      });
       if (card) { card.open = true; card.scrollIntoView({ behavior: "smooth", block: "start" }); }
     }));
     selectPage(this.activeWorkspacePage);
@@ -1380,13 +1389,14 @@ class EchoShowEditor extends HTMLElement {
     }));
     root.querySelectorAll<HTMLButtonElement>("[data-remove-menu]").forEach((button) => button.addEventListener("click", () => {
       const next = readMenuProfiles().filter((menu) => menu.id !== button.closest<HTMLElement>("[data-menu-card]")?.dataset.menuCard);
-      if (next.length) this.emit({ menus: next }, true);
+      if (next.length) { this.selectedMenuId = next[0].id; this.emit({ menus: next }, true); }
     }));
     root.querySelector<HTMLButtonElement>("#add-menu")?.addEventListener("click", () => {
       const next = readMenuProfiles();
       let index = next.length + 1;
       while (next.some((menu) => menu.id === `menu-${index}`)) index += 1;
       next.push({ id: `menu-${index}`, label: `Menu ${index}`, icon: "mdi:view-dashboard", cameras: [], lights: [], temperatures: [], action: "view", destination: "" });
+      this.selectedMenuId = `menu-${index}`;
       this.emit({ menus: next }, true);
     });
     const readMenuToggles = () => normaliseMenuToggles(this.getCurrentConfig().menu_toggles);
