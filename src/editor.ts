@@ -944,7 +944,7 @@ class EchoShowEditor extends HTMLElement {
       .echo-preview-screen{aspect-ratio:16/10;min-height:0;box-sizing:border-box;display:flex;flex-direction:column}
       .echo-preview-nav{flex:none;padding:5px 6px}
       .echo-preview-nav span{padding:4px 2px}
-      .echo-preview-content{min-height:0;flex:1;padding:8px;overflow:auto}.echo-preview-content::-webkit-scrollbar{width:7px}.echo-preview-content{scrollbar-width:thin}.preview-scroll-hint{display:block;position:static;padding:4px 6px;border-radius:5px;background:#eef0ff;color:#4e5980}
+      .echo-preview-content{min-height:0;flex:1;padding:8px;overflow:auto}.echo-preview-content::-webkit-scrollbar{width:7px}.echo-preview-content{scrollbar-width:thin}.preview-scroll-hint{display:block;position:static;padding:4px 6px;border-radius:5px;background:#eef0ff;color:#4e5980}.runtime-preview-wall{display:block;width:100%;min-height:0}.runtime-preview-wall~.echo-preview-tiles{display:none}
       .echo-preview-content>strong{font-size:.78rem}
       .echo-preview-tiles{grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;margin-top:5px}
       .echo-preview-tiles.preview-cols-1{grid-template-columns:1fr}.echo-preview-tiles.preview-cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}.echo-preview-tiles span{min-height:0;aspect-ratio:16/9;padding:3px;font-size:.58rem;position:relative}.echo-preview-tiles span.span-2{grid-column:span 2}.echo-preview-tiles span.span-3{grid-column:span 3}.echo-preview-tiles span img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#090b0d;opacity:.72}.echo-preview-tiles span b{position:relative;z-index:1;padding:2px 4px;border-radius:3px;background:#0009;color:#fff;font-size:.58rem}
@@ -985,6 +985,22 @@ class EchoShowEditor extends HTMLElement {
       root.querySelector(".section-nav")?.insertAdjacentHTML("beforebegin", `<header class="builder-app-header"><div class="brand-mark" aria-hidden="true"><span></span><span></span></div><div class="brand-copy"><strong>Echo Dash Builder</strong><small>Dashboard workspace</small></div><div class="header-spacer"></div><span class="header-dash-name">${escapeHtml(savedProfiles.find((profile) => profile.id === selectedProfileId)?.name || "Choose a Dash")}</span><button type="button" id="header-save-profile" ${selectedProfileId ? "" : "disabled"}>Save Draft</button><button type="button" data-section-target="menus">Edit menus</button><button type="button" data-section-target="deployment" class="primary-action">Review deployment <span aria-hidden="true">↗</span></button></header>`);
     const menuSection = root.querySelector<HTMLElement>("#dashboard-content");
     menuSection?.querySelector(".menus-workspace")?.insertAdjacentHTML("beforeend", `<aside class="menu-preview-panel"><div class="panel-heading"><div><span class="eyebrow">PREVIEW</span><h4>Menu layout</h4></div></div><p class="hint">A scaled Show 8 preview using the draft menu layout.</p><div data-menu-preview>${menuPreviewMarkup(selectedMenu)}</div><div class="preview-note">The Echo uses the selected device and its available entities when this Dash is applied.</div></aside>`);
+    // Reuse the registered runtime camera-wall element for the preview wall so
+    // image containment, labels, detection presentation and native tile sizing
+    // come from the same component used by the generated dashboard.
+    const runtimePreview = menuSection?.querySelector<HTMLElement>("[data-menu-preview]");
+    const runtimeCameras = (selectedMenu?.cameras || []).map((id) => {
+      const camera = cameras.find((item) => item.entityId === id);
+      return camera ? { entity: camera.entityId, label: camera.label, span: this.config.camera_spans?.[id], name_overlay: this.config.camera_overlays?.[id], refresh_interval: this.config.camera_refresh_intervals?.[id] || this.config.camera_refresh_interval || 3000, detections: this.config.camera_detections?.[id] || [] } : null;
+    }).filter(Boolean);
+    if (runtimePreview && runtimeCameras.length && customElements.get("echo-camera-wall")) {
+      runtimePreview.querySelector<HTMLElement>(".echo-preview-tiles")?.style.setProperty("display", "none");
+      const wall = document.createElement("echo-camera-wall") as HTMLElement & { setConfig?: (config: unknown) => void; hass?: unknown };
+      wall.className = "runtime-preview-wall";
+      wall.setConfig?.({ cameras: runtimeCameras, compact: Boolean((selectedMenu?.lights || []).length || (selectedMenu?.temperatures || []).length), detection_types: this.config.detection_types || [] });
+      wall.hass = this._hass;
+      runtimePreview.append(wall);
+    }
     const scalePreviewScreens = (scope: ParentNode = root) => scope.querySelectorAll<HTMLElement>(".echo-preview-screen").forEach((screen) => {
       const virtual = Number(screen.dataset.virtualTileHeight || 0);
       const tiles = screen.querySelector<HTMLElement>(".echo-preview-tiles");
