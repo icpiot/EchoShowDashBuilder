@@ -115,6 +115,7 @@ const profileSettings = (profile: EchoSavedDashboardProfile): Partial<EchoDashbo
   camera_order: profile.camera_order || [],
   camera_overlays: profile.camera_overlays || {},
   camera_spans: profile.camera_spans || {},
+  camera_heights: profile.camera_heights || {},
   camera_refresh_interval: profile.camera_refresh_interval || 3000,
   camera_refresh_intervals: profile.camera_refresh_intervals || {},
   camera_person_entities: profile.camera_person_entities || {},
@@ -134,6 +135,7 @@ const dashSettings = (config: EchoDashboardConfig): Partial<EchoDashboardConfig>
   camera_order: config.camera_order || [],
   camera_overlays: config.camera_overlays || {},
   camera_spans: config.camera_spans || {},
+  camera_heights: config.camera_heights || {},
   camera_refresh_interval: config.camera_refresh_interval || 3000,
   camera_refresh_intervals: config.camera_refresh_intervals || {},
   camera_person_entities: config.camera_person_entities || {},
@@ -190,6 +192,8 @@ function getMenuProfiles(config: any, cameras: Array<{ entityId: string }>, ligh
       lovelace_card_id: String(menu.lovelace_card_id || ""),
       lovelace_card_layouts: cardLayoutsFor(Array.isArray(menu.lovelace_card_ids) ? menu.lovelace_card_ids.map(String) : menu.lovelace_card_id ? [String(menu.lovelace_card_id)] : [], menu.lovelace_card_layouts),
       content_overflow: menu.content_overflow === "scroll" ? "scroll" : "fit",
+      columns: Number(menu.columns) > 0 ? Math.max(1, Math.min(6, Number(menu.columns))) : undefined,
+      item_layouts: menu.item_layouts || {},
     }));
   }
   const legacy = Array.isArray(config.menu) && config.menu.length ? config.menu : ["cameras"];
@@ -271,6 +275,8 @@ class EchoShowEditor extends HTMLElement {
         lovelace_card_ids: Array.from(card.querySelectorAll<HTMLInputElement>("[data-menu-lovelace-card]:checked"), (input) => input.value),
         lovelace_card_layouts: existing?.lovelace_card_layouts || {},
         content_overflow: card.querySelector<HTMLSelectElement>("[data-menu-content-overflow]")?.value === "scroll" ? "scroll" : "fit",
+        columns: Math.max(0, Math.min(6, Number(card.querySelector<HTMLSelectElement>("[data-menu-columns]")?.value || existing?.columns || 0))) || undefined,
+        item_layouts: existing?.item_layouts || {},
       };
     });
     const cameraOrder = Array.from(root.querySelectorAll<HTMLSelectElement>("[data-order]"))
@@ -286,6 +292,8 @@ class EchoShowEditor extends HTMLElement {
     });
     const cameraSpans = { ...(this.config.camera_spans || {}) };
     root.querySelectorAll<HTMLSelectElement>("[data-span]").forEach((select) => { cameraSpans[select.dataset.span || ""] = Number(select.value); });
+    const cameraHeights = { ...(this.config.camera_heights || {}) };
+    root.querySelectorAll<HTMLSelectElement>("[data-camera-height]").forEach((select) => { cameraHeights[select.dataset.cameraHeight || ""] = Number(select.value); });
     const cameraRefreshIntervals = { ...(this.config.camera_refresh_intervals || {}) };
     root.querySelectorAll<HTMLSelectElement>("[data-camera-refresh]").forEach((select) => {
       const entity = select.dataset.cameraRefresh || "";
@@ -356,6 +364,7 @@ class EchoShowEditor extends HTMLElement {
       camera_order: cameraOrder,
       camera_overlays: cameraOverlays,
       camera_spans: cameraSpans,
+      camera_heights: cameraHeights,
       camera_refresh_interval: Math.max(100, Number(root.querySelector<HTMLSelectElement>("#camera-refresh-default")?.value || this.config.camera_refresh_interval || 3000)),
       camera_refresh_intervals: cameraRefreshIntervals,
       detection_types: detectionTypes,
@@ -662,6 +671,7 @@ class EchoShowEditor extends HTMLElement {
     const overlays = this.config.camera_overlays || {};
     const spans = this.config.camera_spans || {};
     const cameraRefreshIntervals = this.config.camera_refresh_intervals || {};
+    const cameraHeights = this.config.camera_heights || {};
     const detectionTypes: Array<any> = Array.isArray(this.config.detection_types) && this.config.detection_types.length ? this.config.detection_types : [
       { id: "person", label: "Person", match: "person", animation: "soft-pulse", color: "#ffc107", show_badge: false, badge_text: "Person" },
       { id: "dog", label: "Dog", match: "dog", animation: "soft-pulse", color: "#7e57c2", show_badge: true, badge_text: "Dog" },
@@ -685,6 +695,7 @@ class EchoShowEditor extends HTMLElement {
     const cameraAppearance = (camera: { entityId: string; label: string }, menuId: string) => {
       const o = overlays[camera.entityId] || {};
       const span = Math.max(1, Math.min(3, Number(spans[camera.entityId]) || 1));
+      const height = Math.max(1, Math.min(2, Number(cameraHeights[camera.entityId]) || 1));
       const refreshOverride = Number(cameraRefreshIntervals[camera.entityId]) || 0;
       const position = cameraOrder.indexOf(camera.entityId) + 1;
       const stateKey = `${menuId}::${camera.entityId}`;
@@ -706,9 +717,9 @@ class EchoShowEditor extends HTMLElement {
         <summary>Camera size, order &amp; overlay</summary>
         <div class="camera-settings-row"><label>Order <select data-order="${escapeHtml(camera.entityId)}">${orderedCameras.map((_, i) => `<option value="${i + 1}" ${position === i + 1 ? "selected" : ""}>${i + 1}</option>`).join("")}</select></label>
         <label>Show name <input type="checkbox" data-overlay-show="${escapeHtml(camera.entityId)}" ${o.show !== false ? "checked" : ""}></label>
-        <label>Name position <select data-overlay-h="${escapeHtml(camera.entityId)}"><option value="left" ${o.horizontal === "left" || !o.horizontal ? "selected" : ""}>Left</option><option value="center" ${o.horizontal === "center" ? "selected" : ""}>Centre</option><option value="right" ${o.horizontal === "right" ? "selected" : ""}>Right</option></select></label>
-        <label>Vertical position <select data-overlay-v="${escapeHtml(camera.entityId)}"><option value="top" ${o.vertical === "top" ? "selected" : ""}>Top</option><option value="bottom" ${o.vertical !== "top" ? "selected" : ""}>Bottom</option></select></label>
-        <label>Tile width <select data-span="${escapeHtml(camera.entityId)}"><option value="1" ${span === 1 ? "selected" : ""}>1 box</option><option value="2" ${span === 2 ? "selected" : ""}>2 boxes</option><option value="3" ${span === 3 ? "selected" : ""}>3 boxes</option></select></label>
+        <label class="overlay-position ${o.show === false ? "overlay-position-hidden" : ""}">Name position <select data-overlay-h="${escapeHtml(camera.entityId)}"><option value="left" ${o.horizontal === "left" || !o.horizontal ? "selected" : ""}>Left</option><option value="center" ${o.horizontal === "center" ? "selected" : ""}>Centre</option><option value="right" ${o.horizontal === "right" ? "selected" : ""}>Right</option></select></label>
+        <label class="overlay-position ${o.show === false ? "overlay-position-hidden" : ""}">Vertical position <select data-overlay-v="${escapeHtml(camera.entityId)}"><option value="top" ${o.vertical === "top" ? "selected" : ""}>Top</option><option value="bottom" ${o.vertical !== "top" ? "selected" : ""}>Bottom</option></select></label>
+        <label>Tile width <select data-span="${escapeHtml(camera.entityId)}"><option value="1" ${span === 1 ? "selected" : ""}>1 box</option><option value="2" ${span === 2 ? "selected" : ""}>2 boxes</option><option value="3" ${span === 3 ? "selected" : ""}>3 boxes</option></select></label><label>Tile height <select data-camera-height="${escapeHtml(camera.entityId)}"><option value="1" ${height === 1 ? "selected" : ""}>1 high</option><option value="2" ${height === 2 ? "selected" : ""}>2 high</option></select></label>
         <label>Image refresh <select data-camera-refresh="${escapeHtml(camera.entityId)}"><option value="0" ${refreshOverride === 0 ? "selected" : ""}>Use default (${cameraRefreshInterval < 1000 ? `${cameraRefreshInterval} ms` : `${cameraRefreshInterval / 1000}s`})</option>${[100, 250, 500, 1000, 2000, 3000, 5000, 10000, 15000].map((value) => `<option value="${value}" ${refreshOverride === value ? "selected" : ""}>${value === 100 ? "100 ms (10 fps, maximum load)" : value === 250 ? "250 ms (4 fps, high load)" : value === 500 ? "500 ms (2 fps)" : `${value / 1000}s`}</option>`).join("")}</select></label>${detectionRows}</div>
         <div class="hint">These settings apply wherever this camera is used.</div></details>`;
     };
@@ -774,6 +785,10 @@ class EchoShowEditor extends HTMLElement {
       const selectedCardIds = Array.from(selectedCards);
       const cardLayouts = cardLayoutsFor(selectedCardIds, menu.lovelace_card_layouts);
       const visualLayout = menu.source === "lovelace_card" && selectedCardIds.length ? `<div class="visual-layout" data-visual-layout-menu="${escapeHtml(menu.id)}"><strong>Arrange cards on the Echo</strong><p class="hint">Drag a card to move it. Use the buttons on a card to resize it. The preview uses the Echo grid and saves the layout immediately.</p><div class="visual-layout-grid">${[...selectedCardIds].sort((a, b) => (cardLayouts[a]?.order || 0) - (cardLayouts[b]?.order || 0)).map((id) => { const card = lovelaceCards.find((item) => item.id === id); const layout = cardLayouts[id] || { order: 1, width: 1, height: 1 }; return `<article class="visual-layout-item span-${layout.width} row-${layout.height}" draggable="true" data-layout-drag="${escapeHtml(id)}" title="Drag to move ${escapeHtml(card?.name || id)}"><span class="visual-layout-name">${escapeHtml(card?.name || id)}</span><span class="visual-layout-size">${layout.width} wide · ${layout.height} high</span><div class="visual-layout-actions"><button type="button" data-layout-resize="narrower" data-layout-card="${escapeHtml(id)}" aria-label="Make ${escapeHtml(card?.name || id)} narrower">−</button><button type="button" data-layout-resize="wider" data-layout-card="${escapeHtml(id)}" aria-label="Make ${escapeHtml(card?.name || id)} wider">+</button><button type="button" data-layout-resize="shorter" data-layout-card="${escapeHtml(id)}" aria-label="Make ${escapeHtml(card?.name || id)} shorter">−</button><button type="button" data-layout-resize="taller" data-layout-card="${escapeHtml(id)}" aria-label="Make ${escapeHtml(card?.name || id)} taller">+</button></div></article>`; }).join("")}</div><div class="hint">Width: −/+ · Height: −/+ · Drag cards to change their order.</div></div>` : "";
+      const selectedCameraIds = orderedMenuCameras(menu);
+      const cameraVisualLayout = menu.source !== "lovelace_card" && selectedCameraIds.length ? `<div class="visual-layout camera-visual-layout"><strong>Arrange cameras on the Echo</strong><p class="hint">Use the controls to reorder cameras and change their width or height. Changes apply wherever the camera is used.</p><div class="visual-layout-grid">${selectedCameraIds.map((id, cameraIndex) => { const camera = cameras.find((item) => item.entityId === id); const width = Math.max(1, Math.min(3, Number(spans[id]) || 1)); const height = Math.max(1, Math.min(2, Number(cameraHeights[id]) || 1)); return `<article class="visual-layout-item span-${width} row-${height}" data-camera-layout="${escapeHtml(id)}"><span class="visual-layout-name">${escapeHtml(camera?.label || id)}</span><span class="visual-layout-size">${width} wide · ${height} high</span><div class="visual-layout-actions"><button type="button" data-camera-move="up" data-camera-id="${escapeHtml(id)}" aria-label="Move ${escapeHtml(camera?.label || id)} earlier" ${cameraIndex === 0 ? "disabled" : ""}>↑</button><button type="button" data-camera-move="down" data-camera-id="${escapeHtml(id)}" aria-label="Move ${escapeHtml(camera?.label || id)} later" ${cameraIndex === selectedCameraIds.length - 1 ? "disabled" : ""}>↓</button><button type="button" data-camera-size="narrower" data-camera-id="${escapeHtml(id)}" aria-label="Make ${escapeHtml(camera?.label || id)} narrower">−</button><button type="button" data-camera-size="wider" data-camera-id="${escapeHtml(id)}" aria-label="Make ${escapeHtml(camera?.label || id)} wider">+</button><button type="button" data-camera-size="shorter" data-camera-id="${escapeHtml(id)}" aria-label="Make ${escapeHtml(camera?.label || id)} shorter">−</button><button type="button" data-camera-size="taller" data-camera-id="${escapeHtml(id)}" aria-label="Make ${escapeHtml(camera?.label || id)} taller">+</button></div></article>`; }).join("")}</div></div>` : "";
+      const nativeIds = [...(menu.lights || []), ...(menu.temperatures || [])];
+      const nativeVisualLayout = menu.source !== "lovelace_card" && nativeIds.length ? `<div class="visual-layout native-visual-layout"><strong>Arrange controls on the Echo</strong><p class="hint">Use the same width, height and order controls for lights and temperature readings.</p><div class="visual-layout-grid">${nativeIds.map((id, itemIndex) => { const layout = menu.item_layouts?.[id] || {}; const width = Math.max(1, Math.min(Number(menu.columns) || 3, Number(layout.width) || 1)); const height = Math.max(1, Math.min(2, Number(layout.height) || 1)); const item = lights.find((light: any) => light.entity_id === id) || temperatures.find((sensor: any) => sensor.entity_id === id); return `<article class="visual-layout-item span-${width} row-${height}"><span class="visual-layout-name">${escapeHtml(item?.attributes?.friendly_name || id)}</span><span class="visual-layout-size">${width} wide · ${height} high</span><div class="visual-layout-actions"><button type="button" data-native-move="up" data-native-id="${escapeHtml(id)}" ${itemIndex === 0 ? "disabled" : ""}>↑</button><button type="button" data-native-move="down" data-native-id="${escapeHtml(id)}" ${itemIndex === nativeIds.length - 1 ? "disabled" : ""}>↓</button><button type="button" data-native-size="narrower" data-native-id="${escapeHtml(id)}">−</button><button type="button" data-native-size="wider" data-native-id="${escapeHtml(id)}">+</button><button type="button" data-native-size="shorter" data-native-id="${escapeHtml(id)}">−</button><button type="button" data-native-size="taller" data-native-id="${escapeHtml(id)}">+</button></div></article>`; }).join("")}</div></div>` : "";
       const sourcePicker = menu.action === "navigate" ? "" : `<div class="row"><label>Button source <select data-menu-source><option value="menu" ${menu.source === "lovelace_card" ? "" : "selected"}>Menu content</option><option value="lovelace_card" ${menu.source === "lovelace_card" ? "selected" : ""}>Lovelace Cards</option></select></label></div>${menu.source === "lovelace_card" ? `<div class="card-picker"><strong>Cards in this menu</strong>${lovelaceCards.map((card) => {
         const selected = selectedCards.has(card.id);
         const layout = cardLayouts[card.id] || { order: selectedCardIds.length + 1, width: 1, height: 1 };
@@ -785,8 +800,8 @@ class EchoShowEditor extends HTMLElement {
       return `<details class="menu-config" data-menu-card="${escapeHtml(menu.id)}" ${menuOpen ? "open" : ""}>
       <summary>Menu ${index + 1}: ${escapeHtml(menu.label)}<span class="menu-summary">${menu.action === "navigate" ? "Navigation" : menu.source === "lovelace_card" ? `${selectedCardIds.length} custom card${selectedCardIds.length === 1 ? "" : "s"}` : `${(menu.cameras || []).length + (menu.lights || []).length + (menu.temperatures || []).length} selected`} · Order ${index + 1}</span></summary>
       <div class="row"><label class="order-field">Menu order <select data-menu-order>${menuProfiles.map((_, optionIndex) => `<option value="${optionIndex + 1}" ${index === optionIndex ? "selected" : ""}>${optionIndex + 1}</option>`).join("")}</select></label><label>Menu name <input type="text" data-menu-label value="${escapeHtml(menu.label)}"></label><label class="icon-field">Icon (optional)<span class="icon-control"><span class="icon-preview" data-icon-preview>${menu.icon ? `<ha-icon icon="${escapeHtml(menu.icon)}"></ha-icon>` : "No icon"}</span><input type="text" data-menu-icon value="${escapeHtml(menu.icon)}" placeholder="Leave blank for no icon"><details class="icon-picker"><summary>Choose icon</summary><input type="search" data-icon-search placeholder="Search all Material Design icons"><div class="icon-options">${MENU_ICON_CHOICES.map(([value, label]) => iconChoiceMarkup(value, label)).join("")}</div><div class="icon-search-status hint"></div></details></span></label><label class="placement-field">Icon placement <select data-menu-icon-placement><option value="left" ${menu.icon_placement === "left" ? "selected" : ""}>Left</option><option value="center" ${menu.icon_placement === "center" ? "selected" : ""}>Middle</option><option value="right" ${menu.icon_placement === "right" ? "selected" : ""}>Right</option></select></label></div>
-      <div class="row"><label>Action <select data-menu-action><option value="view" ${menu.action === "navigate" ? "" : "selected"}>Show this menu</option><option value="navigate" ${menu.action === "navigate" ? "selected" : ""}>Navigate to Dashboard</option></select></label><label>Icon follows state (optional)<input type="text" data-menu-icon-entity value="${escapeHtml(menu.icon_entity || "")}" placeholder="weather.home"></label>${menu.action === "navigate" ? `${destinationSelect}${customDestination}` : ""}</div>${menu.action === "navigate" ? `<div class="hint">Choose any available Home Assistant dashboard or view. Custom paths are limited to this Home Assistant instance and open in the current session without changing the Echo assignment.</div>${this.dashboardDestinationsLoading ? `<div class="hint">Loading dashboards and views…</div>` : ""}${this.dashboardDestinationsError ? `<div class="hint">Could not load the dashboard list: ${escapeHtml(this.dashboardDestinationsError)}</div>` : ""}` : `<div class="row"><label>Content below menu <select data-menu-content-overflow><option value="fit" ${menu.content_overflow === "scroll" ? "" : "selected"}>Fit to remaining area</option><option value="scroll" ${menu.content_overflow === "scroll" ? "selected" : ""}>Scrollable below menu</option></select></label></div><div class="hint">The menu bar remains fixed. Fit to remaining area responsively scales the content below it; Scrollable below menu keeps its selected size and scrolls only that area.</div>`}
-       ${sourcePicker}${visualLayout}
+      <div class="row"><label>Action <select data-menu-action><option value="view" ${menu.action === "navigate" ? "" : "selected"}>Show this menu</option><option value="navigate" ${menu.action === "navigate" ? "selected" : ""}>Navigate to Dashboard</option></select></label><label>Icon follows state (optional)<input type="text" data-menu-icon-entity value="${escapeHtml(menu.icon_entity || "")}" placeholder="weather.home"></label>${menu.action === "navigate" ? `${destinationSelect}${customDestination}` : ""}</div>${menu.action === "navigate" ? `<div class="hint">Choose any available Home Assistant dashboard or view. Custom paths are limited to this Home Assistant instance and open in the current session without changing the Echo assignment.</div>${this.dashboardDestinationsLoading ? `<div class="hint">Loading dashboards and views…</div>` : ""}${this.dashboardDestinationsError ? `<div class="hint">Could not load the dashboard list: ${escapeHtml(this.dashboardDestinationsError)}</div>` : ""}` : `<div class="row"><label>Content below menu <select data-menu-content-overflow><option value="fit" ${menu.content_overflow === "scroll" ? "" : "selected"}>Fit to remaining area</option><option value="scroll" ${menu.content_overflow === "scroll" ? "selected" : ""}>Scrollable below menu</option></select></label><label>Grid columns <select data-menu-columns><option value="" ${!menu.columns ? "selected" : ""}>Automatic</option>${[1,2,3,4,5,6].map((n) => `<option value="${n}" ${Number(menu.columns) === n ? "selected" : ""}>${n} columns</option>`).join("")}</select></label></div><div class="hint">The menu bar remains fixed. Fit to remaining area responsively scales the content below it; Scrollable below menu keeps its selected size and explicit columns keep the chosen grid.</div>`}
+       ${sourcePicker}${visualLayout}${cameraVisualLayout}${nativeVisualLayout}
       <div class="row">${areaSelect}</div>${this.areaRegistryError ? `<div class="hint">Area filters are unavailable: ${escapeHtml(this.areaRegistryError)}</div>` : this.areaRegistryLoading ? `<div class="hint">Loading Home Assistant areas…</div>` : `<div class="hint">Choose an area to narrow the camera, light, and temperature lists for this menu, then tick the entities you want to show.</div>`}
       ${menu.action === "navigate" ? "" : `<details class="content-picker" ${(pickerOpen[0] ?? false) ? "open" : ""}><summary>Cameras · ${(menu.cameras || []).length} selected</summary>${menuCameras.length ? menuCameras.map((camera) => `<div class="camera-choice"><label class="camera"><input type="checkbox" data-menu-camera value="${escapeHtml(camera.entityId)}" ${(menu.cameras || []).includes(camera.entityId) ? "checked" : ""}>${escapeHtml(camera.label)}</label>${(menu.cameras || []).includes(camera.entityId) ? cameraAppearance(camera, menu.id) : ""}</div>`).join("") : `<div class="hint">No cameras are available in this area.</div>`}</details>
       <details class="content-picker" ${(pickerOpen[1] ?? false) ? "open" : ""}><summary>Choose lights · ${(menu.lights || []).length} selected</summary>${menuLights.length ? menuLights.map((light: any) => `<label class="camera"><input type="checkbox" data-menu-light value="${escapeHtml(light.entity_id)}" ${(menu.lights || []).includes(light.entity_id) ? "checked" : ""}>${escapeHtml(light.attributes?.friendly_name || light.entity_id)}</label>`).join("") : `<div class="hint">No lights are available in this area.</div>`}</details>
@@ -818,7 +833,8 @@ class EchoShowEditor extends HTMLElement {
       const previewWidth = 1280, previewHeight = 700, gap = 6;
       const compact = Boolean(this.config.compact);
       const minWidth = Number(this.config.min_tile_width || 180);
-      const maxColumns = Math.min(Math.max(1, tiles.length), Math.max(1, Math.floor((previewWidth + gap) / (minWidth + gap))));
+      const requestedColumns = Number(menu?.columns) > 0 ? Math.max(1, Math.min(6, Number(menu?.columns))) : 0;
+      const maxColumns = requestedColumns || Math.min(Math.max(1, tiles.length), Math.max(1, Math.floor((previewWidth + gap) / (minWidth + gap))));
       const spansFor = (columns: number) => {
         const spans = tiles.map((tile) => Math.min(columns, Math.max(1, Number(tile.span) || 1)));
         let occupied = 0;
@@ -827,7 +843,7 @@ class EchoShowEditor extends HTMLElement {
         return spans;
       };
       let best = { columns: 1, height: previewHeight, score: 0, spans: spansFor(1) };
-      for (let columns = 1; columns <= maxColumns; columns++) {
+      for (const columns of requestedColumns ? [maxColumns] : Array.from({ length: maxColumns }, (_, index) => index + 1)) {
         const spans = spansFor(columns); let rows = 0; let occupied = 0;
         for (const span of spans) { if (occupied + span > columns) { rows++; occupied = 0; } occupied += span; if (occupied === columns) { rows++; occupied = 0; } }
         if (occupied) rows++; rows = Math.max(1, rows);
@@ -926,7 +942,8 @@ class EchoShowEditor extends HTMLElement {
       #setup-library .row:has(#add-profile){display:flex;align-items:center;gap:9px}
       #setup-library .row select{min-width:0;width:100%}
       #setup-library .row button{white-space:nowrap}
-      @media(min-width:1101px) and (max-width:1450px){.section-nav{width:154px;margin-left:14px;margin-right:16px}.section{margin-left:188px;margin-right:16px}.menus-workspace{grid-template-columns:minmax(145px,160px) minmax(0,1fr) minmax(180px,200px);gap:10px}.menu-workspace-list,.menu-preview-panel{padding:13px}.menu-config{padding:8px}.menu-config>.row,.menu-config>.hint,.menu-config>.content-picker,.menu-config>.card-picker,.menu-config>.visual-layout{margin-left:9px;margin-right:9px}}
+      .overlay-position-hidden{display:none!important}.order-field,.card-layout-inline label:first-child{display:none!important}
+      @media(min-width:1101px) and (max-width:1450px){.section-nav{width:154px;margin-left:14px;margin-right:16px}.section{margin-left:188px;margin-right:16px}.menus-workspace{grid-template-columns:minmax(180px,220px) minmax(500px,1fr);gap:12px}.menu-workspace-list,.menu-preview-panel{padding:13px}.menu-preview-panel{grid-column:1/-1;position:static}.menu-preview-panel .echo-preview-screen{max-width:none;width:100%}.menu-config{padding:8px}.menu-config>.row,.menu-config>.hint,.menu-config>.content-picker,.menu-config>.card-picker,.menu-config>.visual-layout{margin-left:9px;margin-right:9px}}
       @media(max-width:1100px){.menus-workspace{grid-template-columns:minmax(155px,190px) minmax(0,1fr)}.menu-preview-panel{grid-column:1/-1;position:static}}
       .menu-workspace-list>.custom-card-holder{display:block;position:static;margin:14px 0 0;padding:12px;width:100%;max-width:100%;min-width:0;overflow:hidden;box-sizing:border-box}.menu-workspace-list>.custom-card-holder[open]{padding-bottom:12px}.custom-card-holder *{box-sizing:border-box;max-width:100%}.custom-card-holder .holder-content{min-width:0;overflow:hidden}.custom-card-holder ul{padding-left:0;margin:10px 0;list-style:none}.custom-card-holder li{display:flex;flex-wrap:wrap;align-items:center;gap:6px;min-width:0;padding:8px 0;border-top:1px solid var(--builder-line)}.custom-card-holder li>span{min-width:0;flex:1 1 100%;overflow-wrap:anywhere;word-break:break-word}.custom-card-holder li>label{display:flex;align-items:center;gap:5px;min-width:0;max-width:100%;font-size:.78rem}.custom-card-holder li input{width:min(100%,150px);min-width:0}
       @media(max-width:900px){.section{margin:0 16px}.menus-workspace{grid-template-columns:1fr}.menu-preview-panel{grid-column:auto}}
@@ -995,7 +1012,7 @@ class EchoShowEditor extends HTMLElement {
       const runtimePreview = menuSection?.querySelector<HTMLElement>("[data-menu-preview]");
       const runtimeHost = runtimePreview?.querySelector<HTMLElement>(".echo-preview-content");
       const runtimeScreen = runtimePreview?.querySelector<HTMLElement>(".echo-preview-screen");
-      const runtimeCameras = orderedMenuCameras(menu).map((id) => { const camera = cameras.find((item) => item.entityId === id); return camera ? { entity: camera.entityId, label: camera.label, span: this.config.camera_spans?.[id], name_overlay: this.config.camera_overlays?.[id], refresh_interval: this.config.camera_refresh_intervals?.[id] || this.config.camera_refresh_interval || 3000, detections: this.config.camera_detections?.[id] || [] } : null; }).filter(Boolean);
+      const runtimeCameras = orderedMenuCameras(menu).map((id) => { const camera = cameras.find((item) => item.entityId === id); return camera ? { entity: camera.entityId, label: camera.label, span: this.config.camera_spans?.[id], height: this.config.camera_heights?.[id], name_overlay: this.config.camera_overlays?.[id], refresh_interval: this.config.camera_refresh_intervals?.[id] || this.config.camera_refresh_interval || 3000, detections: this.config.camera_detections?.[id] || [] } : null; }).filter(Boolean);
       if (!runtimeHost || !runtimeScreen) return;
       runtimeHost.querySelector<HTMLElement>(".echo-preview-tiles")?.style.setProperty("display", "none");
       runtimeHost.querySelectorAll("echo-camera-wall, echo-light-controls, echo-temperature-readings, echo-card-layout, echo-menu-content, echo-menu").forEach((node) => node.remove());
@@ -1009,11 +1026,11 @@ class EchoShowEditor extends HTMLElement {
       if (fallbackNav) fallbackNav.style.display = "none";
       runtimeScreen.insertBefore(runtimeMenu, runtimeHost);
       const contentCards: Record<string, unknown>[] = [];
-      if (runtimeCameras.length && customElements.get("echo-camera-wall")) contentCards.push({ type: "custom:echo-camera-wall", cameras: runtimeCameras, preview_height: 700, preview_width: 1280, compact: Boolean((menu?.lights || []).length || (menu?.temperatures || []).length), detection_types: this.config.detection_types || [] });
+      if (runtimeCameras.length && customElements.get("echo-camera-wall")) contentCards.push({ type: "custom:echo-camera-wall", cameras: runtimeCameras, ...(menu?.columns ? { columns: menu.columns } : {}), preview_height: 700, preview_width: 1280, compact: Boolean((menu?.lights || []).length || (menu?.temperatures || []).length), detection_types: this.config.detection_types || [] });
       const runtimeLights = (menu?.lights || []).map((id) => lights.find((item: any) => String(item.entity_id) === String(id))).filter(Boolean).map((item: any) => ({ entity: String(item.entity_id), label: String(item.attributes?.friendly_name || item.entity_id) }));
-      if (runtimeLights.length && customElements.get("echo-light-controls")) contentCards.push({ type: "custom:echo-light-controls", lights: runtimeLights });
+      if (runtimeLights.length && customElements.get("echo-light-controls")) contentCards.push({ type: "custom:echo-light-controls", lights: runtimeLights, ...(menu?.columns ? { columns: menu.columns } : {}) });
       const runtimeTemperatures = (menu?.temperatures || []).map((id) => temperatures.find((item: any) => String(item.entity_id) === String(id))).filter(Boolean).map((item: any) => ({ entity: String(item.entity_id), label: String(item.attributes?.friendly_name || item.entity_id) }));
-      if (runtimeTemperatures.length && customElements.get("echo-temperature-readings")) contentCards.push({ type: "custom:echo-temperature-readings", sensors: runtimeTemperatures });
+      if (runtimeTemperatures.length && customElements.get("echo-temperature-readings")) contentCards.push({ type: "custom:echo-temperature-readings", sensors: runtimeTemperatures, ...(menu?.columns ? { columns: menu.columns } : {}) });
       let resolvedCards: Record<string, Record<string, unknown>> = {};
       if (menu?.source === "lovelace_card" && Array.isArray(menu.lovelace_card_ids)) {
         try { resolvedCards = await this.resolveLovelaceCards(this.config, [menu]); }
@@ -1026,7 +1043,7 @@ class EchoShowEditor extends HTMLElement {
           const layout = menu.lovelace_card_layouts?.[id] || {};
           return card ? { id, config: card, order: Number(layout.order) || index + 1, width: Number(layout.width) || 1, height: Number(layout.height) || 1 } : null;
         }).filter(Boolean).sort((a: any, b: any) => a.order - b.order);
-        if (cards.length && customElements.get("echo-card-layout")) contentCards.push({ type: "custom:echo-card-layout", cards });
+        if (cards.length && customElements.get("echo-card-layout")) contentCards.push({ type: "custom:echo-card-layout", ...(menu?.columns ? { columns: menu.columns } : {}), cards });
       }
       // Mount the same registered child cards used by the generated dashboard
       // directly. This avoids a second card-helper loading path in the editor
@@ -1046,14 +1063,14 @@ class EchoShowEditor extends HTMLElement {
       scalePreviewScreens(runtimePreview || root);
     };
     const runtimeContentPlaceholder = (host: HTMLElement, node: HTMLElement) => { host.append(node); };
-    void mountRuntimePreview(selectedMenu);
-    const scalePreviewScreens = (scope: ParentNode = root) => scope.querySelectorAll<HTMLElement>(".echo-preview-screen").forEach((screen) => {
+    queueMicrotask(() => void mountRuntimePreview(selectedMenu));
+    function scalePreviewScreens(scope: ParentNode = root) { scope.querySelectorAll<HTMLElement>(".echo-preview-screen").forEach((screen) => {
       const scale = Math.min(1, Math.max(.2, screen.clientWidth / 1280));
       screen.style.setProperty("--preview-scale", String(scale));
       const virtual = Number(screen.dataset.virtualTileHeight || 0);
       const tiles = screen.querySelector<HTMLElement>(".echo-preview-tiles");
       if (virtual && tiles) tiles.style.setProperty("--preview-tile-height", `${Math.max(40, Math.floor(virtual * scale))}px`);
-    });
+    }); }
     const previewResizeObserver = new ResizeObserver(() => scalePreviewScreens());
     root.querySelectorAll<HTMLElement>(".echo-preview-screen").forEach((screen) => previewResizeObserver.observe(screen));
     scalePreviewScreens();
@@ -1393,7 +1410,7 @@ class EchoShowEditor extends HTMLElement {
     // config-changed while typing makes Home Assistant recreate this editor and
     // returns its scroll position to the top.
     root.querySelectorAll<HTMLInputElement>("[data-overlay-show]").forEach((input) => input.addEventListener("change", () => this.emitCurrentConfig()));
-    root.querySelectorAll<HTMLSelectElement>("[data-menu-order], [data-menu-action], [data-menu-destination], [data-menu-source], [data-menu-icon-placement], [data-menu-content-overflow], [data-order], [data-overlay-h], [data-overlay-v], [data-span], [data-camera-refresh], #camera-refresh-default, #kiosk-mode").forEach((input) => input.addEventListener("change", () => this.emitCurrentConfig()));
+    root.querySelectorAll<HTMLSelectElement>("[data-menu-order], [data-menu-action], [data-menu-destination], [data-menu-source], [data-menu-icon-placement], [data-menu-content-overflow], [data-menu-columns], [data-order], [data-overlay-h], [data-overlay-v], [data-span], [data-camera-refresh], #camera-refresh-default, #kiosk-mode").forEach((input) => input.addEventListener("change", () => this.emitCurrentConfig()));
     const updateMenus = (rerender = false, persist = true) => {
       if (persist) this.emit({ menus: readMenuProfiles() }, rerender);
       if (!rerender) {
@@ -1723,7 +1740,9 @@ class EchoShowEditor extends HTMLElement {
     }));
     const updateOverlay = (entity: string) => {
       const next = { ...(this.config.camera_overlays || {}) };
-      next[entity] = { show: root.querySelector<HTMLInputElement>(`[data-overlay-show="${entity}"]`)?.checked !== false, horizontal: root.querySelector<HTMLSelectElement>(`[data-overlay-h="${entity}"]`)?.value || "left", vertical: root.querySelector<HTMLSelectElement>(`[data-overlay-v="${entity}"]`)?.value || "bottom" };
+      const show = root.querySelector<HTMLInputElement>(`[data-overlay-show="${entity}"]`)?.checked !== false;
+      next[entity] = { show, horizontal: root.querySelector<HTMLSelectElement>(`[data-overlay-h="${entity}"]`)?.value || "left", vertical: root.querySelector<HTMLSelectElement>(`[data-overlay-v="${entity}"]`)?.value || "bottom" };
+      root.querySelectorAll<HTMLElement>(`[data-overlay-h="${entity}"], [data-overlay-v="${entity}"]`).forEach((select) => select.closest(".overlay-position")?.classList.toggle("overlay-position-hidden", !show));
       this.emit({ camera_overlays: next }, false);
     };
     root.querySelectorAll<HTMLInputElement>("[data-overlay-show]").forEach((input) => input.addEventListener("change", () => updateOverlay(input.dataset.overlayShow || "")));
@@ -1734,6 +1753,25 @@ class EchoShowEditor extends HTMLElement {
       this.emit({ camera_spans: next }, false);
       const preview = root.querySelector<HTMLElement>("[data-menu-preview]");
       if (preview) { const current = this.getCurrentConfig().menus.find((menu: EchoMenuConfig) => menu.id === this.selectedMenuId); preview.innerHTML = menuPreviewMarkup(current); void mountRuntimePreview(current); }
+    }));
+    root.querySelectorAll<HTMLButtonElement>("[data-native-size]").forEach((button) => button.addEventListener("click", () => {
+      const id = button.dataset.nativeId || ""; const layouts = { ...(this.config.menus?.find((m: any) => m.id === this.selectedMenuId)?.item_layouts || {}) } as any; const current = layouts[id] || {}; const columns = Number(this.config.menus?.find((m: any) => m.id === this.selectedMenuId)?.columns) || 3; const action = button.dataset.nativeSize;
+      layouts[id] = { ...current, width: Math.max(1, Math.min(columns, Number(current.width || 1) + (action === "wider" ? 1 : action === "narrower" ? -1 : 0))), height: Math.max(1, Math.min(2, Number(current.height || 1) + (action === "taller" ? 1 : action === "shorter" ? -1 : 0))) }; this.emit({ menus: this.getCurrentConfig().menus.map((m: any) => m.id === this.selectedMenuId ? { ...m, item_layouts: layouts } : m) }, true);
+    }));
+    root.querySelectorAll<HTMLSelectElement>("[data-camera-height]").forEach((input) => input.addEventListener("change", () => {
+      const next = { ...(this.config.camera_heights || {}) }; next[input.dataset.cameraHeight || ""] = Number(input.value); this.emit({ camera_heights: next }, false);
+    }));
+    root.querySelectorAll<HTMLButtonElement>("[data-camera-size]").forEach((button) => button.addEventListener("click", () => {
+      const entity = button.dataset.cameraId || ""; const spans = { ...(this.config.camera_spans || {}) }; const heights = { ...(this.config.camera_heights || {}) };
+      const current = button.dataset.cameraSize === "wider" || button.dataset.cameraSize === "narrower" ? Math.max(1, Math.min(3, Number(spans[entity]) || 1)) : Math.max(1, Math.min(2, Number(heights[entity]) || 1));
+      const value = button.dataset.cameraSize === "wider" ? Math.min(3, current + 1) : button.dataset.cameraSize === "narrower" ? Math.max(1, current - 1) : button.dataset.cameraSize === "taller" ? Math.min(2, current + 1) : Math.max(1, current - 1);
+      if (button.dataset.cameraSize === "wider" || button.dataset.cameraSize === "narrower") spans[entity] = value; else heights[entity] = value;
+      this.emit({ camera_spans: spans, camera_heights: heights }, true);
+    }));
+    root.querySelectorAll<HTMLButtonElement>("[data-camera-move]").forEach((button) => button.addEventListener("click", () => {
+      const entity = button.dataset.cameraId || ""; const currentOrder = Array.isArray(this.config.camera_order) ? [...this.config.camera_order] : [...cameraOrder]; const index = currentOrder.indexOf(entity); if (index < 0) return;
+      const nextIndex = button.dataset.cameraMove === "up" ? Math.max(0, index - 1) : Math.min(currentOrder.length - 1, index + 1); if (nextIndex === index) return;
+      [currentOrder[index], currentOrder[nextIndex]] = [currentOrder[nextIndex], currentOrder[index]]; this.emit({ camera_order: currentOrder }, true);
     }));
     root.querySelectorAll<HTMLSelectElement>("[data-camera-refresh]").forEach((input) => input.addEventListener("change", () => {
       const next = { ...(this.config.camera_refresh_intervals || {}) };

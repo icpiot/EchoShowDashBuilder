@@ -186,7 +186,10 @@ class EchoCameraWall extends HTMLElement {
     wall.classList.toggle('compact', compact);
     const gap = 6;
     const minimumWidth = Number(this.config.min_tile_width || 180);
-    const maxColumns = Math.min(count, Math.max(1, Math.floor((width + gap) / (minimumWidth + gap))));
+    const requestedColumns = Number(this.config.columns);
+    const maxColumns = requestedColumns > 0
+      ? Math.max(1, Math.min(count, Math.floor(requestedColumns)))
+      : Math.min(count, Math.max(1, Math.floor((width + gap) / (minimumWidth + gap))));
     const availableHeight = Number(this.config.preview_height) > 0
       ? Number(this.config.preview_height)
       : window.innerHeight - wall.getBoundingClientRect().top - 8;
@@ -205,7 +208,8 @@ class EchoCameraWall extends HTMLElement {
       return spans;
     };
     let best: { columns: number; height: number; score: number } | undefined;
-    for (let columns = 1; columns <= maxColumns; columns++) {
+    const columnCandidates = requestedColumns > 0 ? [maxColumns] : Array.from({ length: maxColumns }, (_, index) => index + 1);
+    for (const columns of columnCandidates) {
       // CSS grid moves a wide camera to a new row when it cannot fit in the
       // remaining cells. Count those occupied cells too; dividing camera count
       // by columns underestimates rendered rows and leaves a blank band.
@@ -246,6 +250,8 @@ class EchoCameraWall extends HTMLElement {
     Array.from(wall.querySelectorAll<HTMLElement>('.tile')).forEach((tile, index) => {
       const span = finalSpans[index] || 1;
       tile.style.gridColumn = span > 1 ? `span ${span}` : '';
+      const height = Math.max(1, Math.min(2, Number(this.cameras()[index]?.height) || 1));
+      tile.style.gridRow = height > 1 ? `span ${height}` : '';
     });
     if (compact) wall.style.setProperty('--tile-max-width', `${Math.floor(best.height * 16 / 9 * renderScale)}px`);
     else wall.style.removeProperty('--tile-max-width');
@@ -295,7 +301,8 @@ class EchoLightControls extends HTMLElement {
   private render() {
     const root = this.shadowRoot ?? this.attachShadow({mode:'open'});
     const lights = Array.isArray(this.config.lights) ? this.config.lights : [];
-    root.innerHTML = `<style>${styles}.light-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:8px}.light{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;padding:12px;border-radius:10px;background:var(--ha-card-background,#20252b);color:#f5f7fa}.light-name{font-size:clamp(14px,2vw,20px)}.light-state{opacity:.82;font-size:.85em}.light button{border:0;border-radius:8px;padding:10px 16px;background:var(--primary-color,#03a9f4);color:#fff;font:inherit;cursor:pointer}.light button[aria-pressed=true]{background:var(--success-color,#4caf50)}.brightness{grid-column:1/-1;display:flex;gap:10px;align-items:center}.brightness input{flex:1;min-width:80px}</style><section class="light-list" aria-label="Light controls"></section>`;
+    const columns = Math.max(1, Math.min(6, Number(this.config.columns) || 0));
+    root.innerHTML = `<style>${styles}.light-list{display:grid;grid-template-columns:${columns ? `repeat(${columns},minmax(0,1fr))` : 'repeat(auto-fit,minmax(min(100%,260px),1fr))'};gap:8px}.light{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;padding:12px;border-radius:10px;background:var(--ha-card-background,#20252b);color:#f5f7fa}.light-name{font-size:clamp(14px,2vw,20px)}.light-state{opacity:.82;font-size:.85em}.light button{border:0;border-radius:8px;padding:10px 16px;background:var(--primary-color,#03a9f4);color:#fff;font:inherit;cursor:pointer}.light button[aria-pressed=true]{background:var(--success-color,#4caf50)}.brightness{grid-column:1/-1;display:flex;gap:10px;align-items:center}.brightness input{flex:1;min-width:80px}</style><section class="light-list" aria-label="Light controls"></section>`;
     const list = root.querySelector('.light-list')!;
     if (!lights.length) { list.innerHTML = '<div class="empty">No lights are configured.</div>'; return; }
     for (const light of lights) {
@@ -304,6 +311,10 @@ class EchoLightControls extends HTMLElement {
       const brightness = Number(state?.attributes?.brightness);
       const supportsBrightness = Number.isFinite(brightness) && brightness >= 0;
       const tile = document.createElement('article'); tile.className = 'light';
+      const layout = this.config.layouts?.[light.entity] || {};
+      tile.style.order = String(Math.max(0, Number(layout.order || 0)));
+      tile.style.gridColumn = `span ${Math.max(1, Math.min(columns || 6, Number(layout.width) || 1))}`;
+      tile.style.gridRow = `span ${Math.max(1, Math.min(2, Number(layout.height) || 1))}`;
       tile.innerHTML = `<div><div class="light-name">${light.label || light.entity}</div><div class="light-state">${on ? 'On' : 'Off'}</div></div><button type="button" aria-pressed="${on}">${on ? 'Turn off' : 'Turn on'}</button>${supportsBrightness ? `<label class="brightness">Brightness <input type="range" min="1" max="100" value="${Math.max(1, Math.round(brightness / 255 * 100))}" aria-label="${light.label || light.entity} brightness"><span>${Math.round(brightness / 255 * 100)}%</span></label>` : ''}`;
       tile.querySelector('button')?.addEventListener('click', async () => {
         await this._hass?.callService?.('light', on ? 'turn_off' : 'turn_on', { entity_id: light.entity });
@@ -326,12 +337,17 @@ class EchoTemperatureReadings extends HTMLElement {
   private render() {
     const root = this.shadowRoot ?? this.attachShadow({mode:'open'});
     const sensors = Array.isArray(this.config.sensors) ? this.config.sensors : [];
-    root.innerHTML = `<style>${styles}.temperature-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:8px}.temperature{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px 16px;border-radius:10px;background:var(--ha-card-background,#20252b);color:#f5f7fa}.temperature-name{font-size:clamp(14px,2vw,19px)}.temperature-value{font-size:clamp(22px,3.4vw,34px);font-weight:600;white-space:nowrap}</style><section class="temperature-list" aria-label="Temperature readings"></section>`;
+    const columns = Math.max(1, Math.min(6, Number(this.config.columns) || 0));
+    root.innerHTML = `<style>${styles}.temperature-list{display:grid;grid-template-columns:${columns ? `repeat(${columns},minmax(0,1fr))` : 'repeat(auto-fit,minmax(min(100%,220px),1fr))'};gap:8px}.temperature{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px 16px;border-radius:10px;background:var(--ha-card-background,#20252b);color:#f5f7fa}.temperature-name{font-size:clamp(14px,2vw,19px)}.temperature-value{font-size:clamp(22px,3.4vw,34px);font-weight:600;white-space:nowrap}</style><section class="temperature-list" aria-label="Temperature readings"></section>`;
     const list = root.querySelector('.temperature-list')!;
     if (!sensors.length) { list.innerHTML = '<div class="empty">No temperature sensors are configured.</div>'; return; }
     for (const sensor of sensors) {
       const state = this._hass?.states[sensor.entity];
       const tile = document.createElement('article'); tile.className = 'temperature';
+      const layout = this.config.layouts?.[sensor.entity] || {};
+      tile.style.order = String(Math.max(0, Number(layout.order || 0)));
+      tile.style.gridColumn = `span ${Math.max(1, Math.min(columns || 6, Number(layout.width) || 1))}`;
+      tile.style.gridRow = `span ${Math.max(1, Math.min(2, Number(layout.height) || 1))}`;
       const name = document.createElement('span'); name.className = 'temperature-name'; name.textContent = sensor.label || sensor.entity;
       const value = document.createElement('strong'); value.className = 'temperature-value';
       const current = state?.state;
@@ -355,7 +371,8 @@ class EchoCardLayout extends HTMLElement {
   private async render() {
     const root = this.shadowRoot ?? this.attachShadow({mode:'open'});
     const cards = Array.isArray(this.config.cards) ? this.config.cards : [];
-    root.innerHTML = `<style>:host{display:block}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-auto-rows:minmax(104px,auto);gap:8px}.item{min-width:0;min-height:0;overflow:hidden}.item>*{display:block;height:100%;min-height:100%}@media(max-width:600px){.grid{grid-template-columns:repeat(2,minmax(0,1fr));}}</style><section class="grid" aria-label="Custom cards"></section>`;
+    const columns = Math.max(1, Math.min(6, Number(this.config.columns) || 3));
+    root.innerHTML = `<style>:host{display:block}.grid{display:grid;grid-template-columns:repeat(${columns},minmax(0,1fr));grid-auto-rows:minmax(104px,auto);gap:8px}.item{min-width:0;min-height:0;overflow:hidden}.item>*{display:block;height:100%;min-height:100%}</style><section class="grid" aria-label="Custom cards"></section>`;
     const grid = root.querySelector('.grid')!;
     if (!cards.length) return;
     try {
@@ -365,7 +382,7 @@ class EchoCardLayout extends HTMLElement {
         if (!item?.config) continue;
         const wrapper = document.createElement('div');
         wrapper.className = 'item';
-        wrapper.style.gridColumn = `span ${Math.max(1, Math.min(3, Number(item.width) || 1))}`;
+        wrapper.style.gridColumn = `span ${Math.max(1, Math.min(columns, Number(item.width) || 1))}`;
         wrapper.style.gridRow = `span ${Math.max(1, Math.min(2, Number(item.height) || 1))}`;
         // Button Card needs its card surface explicitly stretched; otherwise a
         // multi-row grid item grows while the card remains one row high.  Give

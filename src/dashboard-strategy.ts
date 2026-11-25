@@ -19,6 +19,7 @@ export interface EchoDashboardConfig {
   kiosk_mode?: KioskModeSetting | boolean;
   camera_overlays?: Record<string, { show?: boolean; horizontal?: string; vertical?: string }>;
   camera_spans?: Record<string, number>;
+  camera_heights?: Record<string, number>;
   camera_order?: string[];
   refresh_interval?: number;
   camera_refresh_interval?: number;
@@ -53,6 +54,7 @@ export interface EchoSavedDashboardProfile {
   camera_order?: string[];
   camera_overlays?: Record<string, { show?: boolean; horizontal?: string; vertical?: string }>;
   camera_spans?: Record<string, number>;
+  camera_heights?: Record<string, number>;
   camera_refresh_interval?: number;
   camera_refresh_intervals?: Record<string, number>;
   camera_person_entities?: Record<string, string>;
@@ -149,6 +151,10 @@ export interface EchoMenuConfig {
   lovelace_card_layouts?: Record<string, { order?: number; width?: number; height?: number }>;
   /** Whether the content below the fixed menu bar scales to fit or scrolls. */
   content_overflow?: "fit" | "scroll";
+  /** Optional fixed content grid columns; omitted keeps automatic layout. */
+  columns?: number;
+  /** Optional per-menu native tile arrangement, keyed by entity id. */
+  item_layouts?: Record<string, { order?: number; width?: number; height?: number }>;
 }
 
 export function kioskModeSetting(value: unknown, defaultValue: KioskModeSetting = "inherit"): KioskModeSetting {
@@ -275,14 +281,14 @@ export function generateEchoDashboard(config: EchoDashboardConfig, hass: HomeAss
           : (config.camera_person_entities?.[camera.entityId]
             ? [{ id: "person", type_id: "person", entity: config.camera_person_entities[camera.entityId] }]
             : []);
-        return { entity: camera.entityId, label: camera.label, native_camera_service: config.echo_target ? `${config.echo_target}_home_show_camera` : undefined, name_overlay: config.camera_overlays?.[camera.entityId], span: config.camera_spans?.[camera.entityId], refresh_interval: config.camera_refresh_intervals?.[camera.entityId] || config.camera_refresh_interval || config.refresh_interval || 3000, detections };
+        return { entity: camera.entityId, label: camera.label, native_camera_service: config.echo_target ? `${config.echo_target}_home_show_camera` : undefined, name_overlay: config.camera_overlays?.[camera.entityId], span: config.camera_spans?.[camera.entityId], height: config.camera_heights?.[camera.entityId], refresh_interval: config.camera_refresh_intervals?.[camera.entityId] || config.camera_refresh_interval || config.refresh_interval || 3000, detections };
       });
     const lights = availableLights.filter((light) => (menu.lights || []).includes(light.entity));
     const temperatures = availableTemperatures.filter((sensor) => (menu.temperatures || []).includes(sensor.entity));
     const content: Record<string, unknown>[] = [];
-    if (cameras.length) content.push({ type: "custom:echo-camera-wall", cameras, compact: lights.length > 0 || temperatures.length > 0, detection_types: config.detection_types || [{ id: "person", label: "Person", match: "person", ...(config.person_detection || {}) }, { id: "dog", label: "Dog", match: "dog", animation: "soft-pulse", color: "#7e57c2", show_badge: true, badge_text: "Dog" }] });
-    if (lights.length) content.push({ type: "custom:echo-light-controls", lights });
-    if (temperatures.length) content.push({ type: "custom:echo-temperature-readings", sensors: temperatures });
+    if (cameras.length) content.push({ type: "custom:echo-camera-wall", cameras, ...(menu?.columns ? { columns: menu.columns } : {}), compact: lights.length > 0 || temperatures.length > 0, detection_types: config.detection_types || [{ id: "person", label: "Person", match: "person", ...(config.person_detection || {}) }, { id: "dog", label: "Dog", match: "dog", animation: "soft-pulse", color: "#7e57c2", show_badge: true, badge_text: "Dog" }] });
+    if (lights.length) content.push({ type: "custom:echo-light-controls", lights, ...(menu?.columns ? { columns: menu.columns } : {}), layouts: menu.item_layouts || {} });
+    if (temperatures.length) content.push({ type: "custom:echo-temperature-readings", sensors: temperatures, ...(menu?.columns ? { columns: menu.columns } : {}), layouts: menu.item_layouts || {} });
     if (menu.source === "lovelace_card") {
       const selectedIds = Array.isArray(menu.lovelace_card_ids) && menu.lovelace_card_ids.length
         ? menu.lovelace_card_ids : menu.lovelace_card_id ? [menu.lovelace_card_id] : [];
