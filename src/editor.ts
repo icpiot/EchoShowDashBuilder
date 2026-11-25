@@ -928,7 +928,7 @@ class EchoShowEditor extends HTMLElement {
       #setup-library .row button{white-space:nowrap}
       @media(min-width:1101px) and (max-width:1450px){.section-nav{width:154px;margin-left:14px;margin-right:16px}.section{margin-left:188px;margin-right:16px}.menus-workspace{grid-template-columns:minmax(145px,160px) minmax(0,1fr) minmax(180px,200px);gap:10px}.menu-workspace-list,.menu-preview-panel{padding:13px}.menu-config{padding:8px}.menu-config>.row,.menu-config>.hint,.menu-config>.content-picker,.menu-config>.card-picker,.menu-config>.visual-layout{margin-left:9px;margin-right:9px}}
       @media(max-width:1100px){.menus-workspace{grid-template-columns:minmax(155px,190px) minmax(0,1fr)}.menu-preview-panel{grid-column:1/-1;position:static}}
-      .menu-workspace-list>.custom-card-holder{display:block;position:static;margin:14px 0 0;padding:12px;width:auto}.menu-workspace-list>.custom-card-holder[open]{padding-bottom:12px}
+      .menu-workspace-list>.custom-card-holder{display:block;position:static;margin:14px 0 0;padding:12px;width:100%;max-width:100%;min-width:0;overflow:hidden;box-sizing:border-box}.menu-workspace-list>.custom-card-holder[open]{padding-bottom:12px}.custom-card-holder *{box-sizing:border-box;max-width:100%}.custom-card-holder .holder-content{min-width:0;overflow:hidden}.custom-card-holder ul{padding-left:0;margin:10px 0;list-style:none}.custom-card-holder li{display:flex;flex-wrap:wrap;align-items:center;gap:6px;min-width:0;padding:8px 0;border-top:1px solid var(--builder-line)}.custom-card-holder li>span{min-width:0;flex:1 1 100%;overflow-wrap:anywhere;word-break:break-word}.custom-card-holder li>label{display:flex;align-items:center;gap:5px;min-width:0;max-width:100%;font-size:.78rem}.custom-card-holder li input{width:min(100%,150px);min-width:0}
       @media(max-width:900px){.section{margin:0 16px}.menus-workspace{grid-template-columns:1fr}.menu-preview-panel{grid-column:auto}}
       @media(max-width:560px){.camera-settings-row{grid-template-columns:1fr}#setup-library .row button{white-space:normal}}
       .quick-steps{grid-template-columns:repeat(5,minmax(0,1fr))}
@@ -953,7 +953,7 @@ class EchoShowEditor extends HTMLElement {
       .deployment-device-screen{aspect-ratio:16/10;min-height:0;box-sizing:border-box;padding:clamp(8px,2vw,18px)}
       .device-menu-grid{gap:7px;margin:12px 0}
       .device-menu-grid>div{min-height:0;padding:7px}
-      @media(min-width:901px) and (max-width:1450px){.menus-workspace{grid-template-columns:minmax(180px,220px) minmax(0,1fr)}.menu-preview-panel{grid-column:1/-1;position:static}.menu-preview-panel .echo-preview-screen{width:min(760px,100%);max-width:none}}
+      @media(min-width:901px) and (max-width:1450px){.menus-workspace{grid-template-columns:minmax(160px,190px) minmax(360px,1fr) minmax(360px,420px);gap:12px}.menu-preview-panel{grid-column:auto;position:sticky;top:18px}.menu-preview-panel .echo-preview-screen{width:100%;max-width:none}}
       .icon-preview:not(:has(ha-icon)){font-size:0}
       .icon-preview:not(:has(ha-icon))::after{content:"—";font-size:1rem;color:#8790aa}
       @media(max-width:900px){.section-nav{scrollbar-width:none}.section-nav::-webkit-scrollbar{display:none}}
