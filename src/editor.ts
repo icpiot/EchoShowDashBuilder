@@ -523,7 +523,6 @@ class EchoShowEditor extends HTMLElement {
             return { id: String(dashboard.id), title: String(dashboard.title || dashboard.url_path), url_path: String(dashboard.url_path), target: String(strategy.echo_target || "") };
           }
           return null;
-            : null;
         } catch { return null; }
       }));
       this.managedDashboards = managed.filter((dashboard): dashboard is { id: string; title: string; url_path: string; target: string } => Boolean(dashboard));
