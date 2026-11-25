@@ -230,16 +230,24 @@ class EchoCameraWall extends HTMLElement {
     if (!best) {
       wall.style.setProperty('--cols', String(Math.max(1, maxColumns)));
       wall.style.removeProperty('--tile-height');
+      wall.style.removeProperty('--gap');
       return;
     }
+    // Preview walls are laid out in a virtual Show 8 canvas (1280px wide),
+    // then rendered inside the smaller editor preview. Scale the calculated
+    // row height and gap to the actual wall width so the complete virtual
+    // layout remains visible instead of clipping its lower rows.
+    const virtualWidth = Number(this.config.preview_width) > 0 ? Number(this.config.preview_width) : 0;
+    const renderScale = virtualWidth > 0 ? Math.min(1, (this.clientWidth || virtualWidth) / virtualWidth) : 1;
     wall.style.setProperty('--cols', String(best.columns));
-    wall.style.setProperty('--tile-height', `${Math.floor(best.height)}px`);
+    wall.style.setProperty('--gap', `${Math.max(1, Math.floor(gap * renderScale))}px`);
+    wall.style.setProperty('--tile-height', `${Math.max(1, Math.floor(best.height * renderScale))}px`);
     const finalSpans = spansFor(best.columns);
     Array.from(wall.querySelectorAll<HTMLElement>('.tile')).forEach((tile, index) => {
       const span = finalSpans[index] || 1;
       tile.style.gridColumn = span > 1 ? `span ${span}` : '';
     });
-    if (compact) wall.style.setProperty('--tile-max-width', `${Math.floor(best.height * 16 / 9)}px`);
+    if (compact) wall.style.setProperty('--tile-max-width', `${Math.floor(best.height * 16 / 9 * renderScale)}px`);
     else wall.style.removeProperty('--tile-max-width');
   }
   private refresh() {
