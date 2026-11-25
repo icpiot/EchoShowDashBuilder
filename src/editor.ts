@@ -810,7 +810,9 @@ class EchoShowEditor extends HTMLElement {
       // Mirror the camera-wall layout scoring used by the runtime card.  The
       // preview uses a Show 8-sized viewport, so column count, row height and
       // fit-mode spans change with the draft rather than being decorative.
-      const previewWidth = 760, previewHeight = 430, gap = 6;
+      // Compute at the physical Show 8 landscape canvas, then CSS scales the
+      // result into the side rail or large-preview dialog.
+      const previewWidth = 1280, previewHeight = 800, gap = 6;
       const compact = Boolean(this.config.compact);
       const minWidth = Number(this.config.min_tile_width || 180);
       const maxColumns = Math.min(Math.max(1, tiles.length), Math.max(1, Math.floor((previewWidth + gap) / (minWidth + gap))));
