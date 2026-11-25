@@ -1026,6 +1026,19 @@ class EchoShowEditor extends HTMLElement {
       runtimeHost.append(runtimeContent);
       for (const cardConfig of contentCards) {
         const type = String(cardConfig.type || "");
+        if (type === "custom:echo-card-layout" && Array.isArray((cardConfig as any).cards)) {
+          const grid = document.createElement("div"); grid.style.display = "grid"; grid.style.gridTemplateColumns = "repeat(3,minmax(0,1fr))"; grid.style.gap = "6px";
+          for (const item of (cardConfig as any).cards) {
+            const config = item?.config || {}; const cardType = String(config.type || "");
+            const cardTag = cardType.startsWith("custom:") ? cardType.slice(7).replace(/_/g, "-") : "";
+            if (!cardTag || !customElements.get(cardTag)) continue;
+            const holder = document.createElement("div"); holder.style.gridColumn = `span ${Math.max(1, Math.min(3, Number(item.width) || 1))}`; holder.style.minHeight = `${Math.max(104, 104 * Math.max(1, Math.min(2, Number(item.height) || 1)))}px`;
+            const card = document.createElement(cardTag) as HTMLElement & { setConfig?: (config: unknown) => void; hass?: unknown };
+            card.inert = true; card.style.pointerEvents = "none"; card.style.display = "block"; card.style.height = "100%"; card.setConfig?.(config); card.hass = this._hass; holder.append(card); grid.append(holder);
+          }
+          if (grid.childElementCount) runtimeContent.append(grid);
+          continue;
+        }
         const tag = type === "custom:echo-camera-wall" ? "echo-camera-wall" : type === "custom:echo-light-controls" ? "echo-light-controls" : type === "custom:echo-temperature-readings" ? "echo-temperature-readings" : type === "custom:echo-card-layout" ? "echo-card-layout" : "";
         if (!tag || !customElements.get(tag)) continue;
         const card = document.createElement(tag) as HTMLElement & { setConfig?: (config: unknown) => void; hass?: unknown };
