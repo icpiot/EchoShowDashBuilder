@@ -432,7 +432,9 @@ class EchoMenuContent extends HTMLElement {
     const shell = this.shadowRoot?.querySelector<HTMLElement>(".shell");
     const content = this.shadowRoot?.querySelector<HTMLElement>(".content");
     if (!shell || !content || this.style.display === "none") return;
-    const available = Math.max(80, Math.floor(window.innerHeight - this.getBoundingClientRect().top - 6));
+    const available = Number(this.config.preview_height) > 0
+      ? Number(this.config.preview_height)
+      : Math.max(80, Math.floor(window.innerHeight - this.getBoundingClientRect().top - 6));
     shell.style.height = `${available}px`;
     content.style.transform = "";
     content.style.width = "";

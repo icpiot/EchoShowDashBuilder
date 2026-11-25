@@ -991,14 +991,35 @@ class EchoShowEditor extends HTMLElement {
     const mountRuntimePreview = (menu: EchoMenuConfig | undefined) => {
       const runtimePreview = menuSection?.querySelector<HTMLElement>("[data-menu-preview]");
       const runtimeHost = runtimePreview?.querySelector<HTMLElement>(".echo-preview-content");
+      const runtimeScreen = runtimePreview?.querySelector<HTMLElement>(".echo-preview-screen");
       const runtimeCameras = orderedMenuCameras(menu).map((id) => { const camera = cameras.find((item) => item.entityId === id); return camera ? { entity: camera.entityId, label: camera.label, span: this.config.camera_spans?.[id], name_overlay: this.config.camera_overlays?.[id], refresh_interval: this.config.camera_refresh_intervals?.[id] || this.config.camera_refresh_interval || 3000, detections: this.config.camera_detections?.[id] || [] } : null; }).filter(Boolean);
-      if (runtimeHost && runtimeCameras.length && customElements.get("echo-camera-wall")) {
-        runtimeHost.querySelector<HTMLElement>(".echo-preview-tiles")?.style.setProperty("display", "none");
-        runtimeHost.querySelector("echo-camera-wall")?.remove();
-        const wall = document.createElement("echo-camera-wall") as HTMLElement & { setConfig?: (config: unknown) => void; hass?: unknown };
-        wall.className = "runtime-preview-wall"; wall.inert = true; wall.style.pointerEvents = "none";
-        wall.setConfig?.({ cameras: runtimeCameras, preview_height: 700, preview_width: 1280, compact: Boolean((menu?.lights || []).length || (menu?.temperatures || []).length), detection_types: this.config.detection_types || [] }); wall.hass = this._hass; runtimeHost.append(wall);
+      if (!runtimeHost || !runtimeScreen) return;
+      runtimeHost.querySelector<HTMLElement>(".echo-preview-tiles")?.style.setProperty("display", "none");
+      runtimeHost.querySelectorAll("echo-camera-wall, echo-light-controls, echo-temperature-readings, echo-card-layout, echo-menu-content, echo-menu").forEach((node) => node.remove());
+      const runtimeMenu = document.createElement("echo-menu") as HTMLElement & { setConfig?: (config: unknown) => void; hass?: unknown };
+      runtimeMenu.className = "runtime-preview-menu"; runtimeMenu.inert = true; runtimeMenu.style.pointerEvents = "none";
+      const menuItems = menuProfiles.map((item) => ({ path: item.id, label: item.label, icon: item.icon, icon_entity: item.icon_entity, action: item.action, destination: item.destination }));
+      runtimeMenu.setConfig?.({ items: menuItems, toggles: this.config.menu_toggles || [], statuses: this.config.menu_statuses || [], active_path: menu?.id }); runtimeMenu.hass = this._hass;
+      const fallbackNav = runtimeScreen.querySelector<HTMLElement>(".echo-preview-nav");
+      if (fallbackNav) fallbackNav.style.display = "none";
+      runtimeScreen.insertBefore(runtimeMenu, runtimeHost);
+      const contentCards: Record<string, unknown>[] = [];
+      if (runtimeCameras.length && customElements.get("echo-camera-wall")) contentCards.push({ type: "custom:echo-camera-wall", cameras: runtimeCameras, preview_height: 700, preview_width: 1280, compact: Boolean((menu?.lights || []).length || (menu?.temperatures || []).length), detection_types: this.config.detection_types || [] });
+      const runtimeLights = (menu?.lights || []).map((id) => lights.find((item: any) => String(item.entity_id) === String(id))).filter(Boolean).map((item: any) => ({ entity: String(item.entity_id), label: String(item.attributes?.friendly_name || item.entity_id) }));
+      if (runtimeLights.length && customElements.get("echo-light-controls")) contentCards.push({ type: "custom:echo-light-controls", lights: runtimeLights });
+      const runtimeTemperatures = (menu?.temperatures || []).map((id) => temperatures.find((item: any) => String(item.entity_id) === String(id))).filter(Boolean).map((item: any) => ({ entity: String(item.entity_id), label: String(item.attributes?.friendly_name || item.entity_id) }));
+      if (runtimeTemperatures.length && customElements.get("echo-temperature-readings")) contentCards.push({ type: "custom:echo-temperature-readings", sensors: runtimeTemperatures });
+      if (menu?.source === "lovelace_card" && Array.isArray(menu.lovelace_card_ids)) {
+        const cards = menu.lovelace_card_ids.map((id: string, index: number) => {
+          const card = this.config.lovelace_cards?.[id];
+          const layout = menu.lovelace_card_layouts?.[id] || {};
+          return card ? { id, config: card, order: Number(layout.order) || index + 1, width: Number(layout.width) || 1, height: Number(layout.height) || 1 } : null;
+        }).filter(Boolean).sort((a: any, b: any) => a.order - b.order);
+        if (cards.length && customElements.get("echo-card-layout")) contentCards.push({ type: "custom:echo-card-layout", cards });
       }
+      const content = document.createElement("echo-menu-content") as HTMLElement & { setConfig?: (config: unknown) => void; hass?: unknown };
+      content.className = "runtime-preview-content"; content.inert = true; content.style.pointerEvents = "none";
+      content.setConfig?.({ menu_id: menu?.id, preview_height: 700, preview_width: 1280, content_overflow: menu?.content_overflow === "scroll" ? "scroll" : "fit", cards: contentCards }); content.hass = this._hass; runtimeHost.append(content);
     };
     mountRuntimePreview(selectedMenu);
     const scalePreviewScreens = (scope: ParentNode = root) => scope.querySelectorAll<HTMLElement>(".echo-preview-screen").forEach((screen) => {
