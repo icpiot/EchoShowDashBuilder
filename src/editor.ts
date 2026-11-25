@@ -1017,9 +1017,21 @@ class EchoShowEditor extends HTMLElement {
         }).filter(Boolean).sort((a: any, b: any) => a.order - b.order);
         if (cards.length && customElements.get("echo-card-layout")) contentCards.push({ type: "custom:echo-card-layout", cards });
       }
-      const content = document.createElement("echo-menu-content") as HTMLElement & { setConfig?: (config: unknown) => void; hass?: unknown };
-      content.className = "runtime-preview-content"; content.inert = true; content.style.pointerEvents = "none";
-      content.setConfig?.({ menu_id: menu?.id, preview_height: 700, preview_width: 1280, content_overflow: menu?.content_overflow === "scroll" ? "scroll" : "fit", cards: contentCards }); content.hass = this._hass; runtimeHost.append(content);
+      // Mount the same registered child cards used by the generated dashboard
+      // directly. This avoids a second card-helper loading path in the editor
+      // while preserving each card's own rendering and state behavior.
+      const runtimeContent = document.createElement("div");
+      runtimeContent.className = "runtime-preview-content"; runtimeContent.inert = true; runtimeContent.style.pointerEvents = "none";
+      runtimeContent.style.display = "grid"; runtimeContent.style.gap = "6px"; runtimeContent.style.maxHeight = "100%"; runtimeContent.style.overflow = menu?.content_overflow === "scroll" ? "auto" : "hidden";
+      runtimeHost.append(runtimeContent);
+      for (const cardConfig of contentCards) {
+        const type = String(cardConfig.type || "");
+        const tag = type === "custom:echo-camera-wall" ? "echo-camera-wall" : type === "custom:echo-light-controls" ? "echo-light-controls" : type === "custom:echo-temperature-readings" ? "echo-temperature-readings" : type === "custom:echo-card-layout" ? "echo-card-layout" : "";
+        if (!tag || !customElements.get(tag)) continue;
+        const card = document.createElement(tag) as HTMLElement & { setConfig?: (config: unknown) => void; hass?: unknown };
+        card.style.minWidth = "0"; card.style.display = "block"; card.inert = true; card.style.pointerEvents = "none";
+        card.setConfig?.(cardConfig); card.hass = this._hass; runtimeContent.append(card);
+      }
     };
     mountRuntimePreview(selectedMenu);
     const scalePreviewScreens = (scope: ParentNode = root) => scope.querySelectorAll<HTMLElement>(".echo-preview-screen").forEach((screen) => {
