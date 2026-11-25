@@ -892,7 +892,7 @@ class EchoShowEditor extends HTMLElement {
       #setup-library .row button{white-space:nowrap}
       @media(min-width:1101px) and (max-width:1450px){.section-nav{width:154px;margin-left:14px;margin-right:16px}.section{margin-left:188px;margin-right:16px}.menus-workspace{grid-template-columns:minmax(145px,160px) minmax(0,1fr) minmax(180px,200px);gap:10px}.menu-workspace-list,.menu-preview-panel{padding:13px}.menu-config{padding:8px}.menu-config>.row,.menu-config>.hint,.menu-config>.content-picker,.menu-config>.card-picker,.menu-config>.visual-layout{margin-left:9px;margin-right:9px}}
       @media(max-width:1100px){.menus-workspace{grid-template-columns:minmax(155px,190px) minmax(0,1fr)}.menu-preview-panel{grid-column:1/-1;position:static}}
-      .menu-workspace-list>.custom-card-holder{margin-top:14px;padding:12px;width:auto}.menu-workspace-list>.custom-card-holder[open]{padding-bottom:12px}
+      .menu-workspace-list>.custom-card-holder{display:block;position:static;margin:14px 0 0;padding:12px;width:auto}.menu-workspace-list>.custom-card-holder[open]{padding-bottom:12px}
       @media(max-width:900px){.section{margin:0 16px}.menus-workspace{grid-template-columns:1fr}.menu-preview-panel{grid-column:auto}}
       @media(max-width:560px){.camera-settings-row{grid-template-columns:1fr}#setup-library .row button{white-space:normal}}
       .quick-steps{grid-template-columns:repeat(5,minmax(0,1fr))}
