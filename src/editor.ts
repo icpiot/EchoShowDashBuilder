@@ -1089,6 +1089,7 @@ class EchoShowEditor extends HTMLElement {
     };
     root.querySelector<HTMLButtonElement>("#open-large-preview")?.addEventListener("click", openLargePreview);
     root.querySelector<HTMLButtonElement>("#close-large-preview")?.addEventListener("click", () => { const dialog = root.querySelector<HTMLElement>("#large-preview-dialog"); if (dialog) dialog.hidden = true; });
+    root.querySelector<HTMLElement>("#large-preview-dialog")?.addEventListener("keydown", (event) => { if ((event as KeyboardEvent).key === "Escape") (event.currentTarget as HTMLElement).hidden = true; });
     root.querySelector<HTMLElement>("#large-preview-dialog")?.addEventListener("click", (event) => { if (event.target === event.currentTarget) (event.currentTarget as HTMLElement).hidden = true; });
     root.querySelector<HTMLButtonElement>("#header-save-profile")?.addEventListener("click", () => root.querySelector<HTMLButtonElement>("#save-profile")?.click());
     root.querySelectorAll<HTMLButtonElement>("[data-profile-tile]").forEach((button) => button.addEventListener("click", () => {
