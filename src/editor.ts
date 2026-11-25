@@ -989,17 +989,20 @@ class EchoShowEditor extends HTMLElement {
     // image containment, labels, detection presentation and native tile sizing
     // come from the same component used by the generated dashboard.
     const runtimePreview = menuSection?.querySelector<HTMLElement>("[data-menu-preview]");
-    const runtimeCameras = (selectedMenu?.cameras || []).map((id) => {
+    const runtimeHost = runtimePreview?.querySelector<HTMLElement>(".echo-preview-content");
+    const runtimeCameras = orderedMenuCameras(selectedMenu).map((id) => {
       const camera = cameras.find((item) => item.entityId === id);
       return camera ? { entity: camera.entityId, label: camera.label, span: this.config.camera_spans?.[id], name_overlay: this.config.camera_overlays?.[id], refresh_interval: this.config.camera_refresh_intervals?.[id] || this.config.camera_refresh_interval || 3000, detections: this.config.camera_detections?.[id] || [] } : null;
     }).filter(Boolean);
-    if (runtimePreview && runtimeCameras.length && customElements.get("echo-camera-wall")) {
-      runtimePreview.querySelector<HTMLElement>(".echo-preview-tiles")?.style.setProperty("display", "none");
+    if (runtimeHost && runtimeCameras.length && customElements.get("echo-camera-wall")) {
+      runtimeHost.querySelector<HTMLElement>(".echo-preview-tiles")?.style.setProperty("display", "none");
       const wall = document.createElement("echo-camera-wall") as HTMLElement & { setConfig?: (config: unknown) => void; hass?: unknown };
       wall.className = "runtime-preview-wall";
-      wall.setConfig?.({ cameras: runtimeCameras, compact: Boolean((selectedMenu?.lights || []).length || (selectedMenu?.temperatures || []).length), detection_types: this.config.detection_types || [] });
+      wall.inert = true;
+      wall.style.pointerEvents = "none";
+      wall.setConfig?.({ cameras: runtimeCameras, preview_height: 700, compact: Boolean((selectedMenu?.lights || []).length || (selectedMenu?.temperatures || []).length), detection_types: this.config.detection_types || [] });
       wall.hass = this._hass;
-      runtimePreview.append(wall);
+      runtimeHost.append(wall);
     }
     const scalePreviewScreens = (scope: ParentNode = root) => scope.querySelectorAll<HTMLElement>(".echo-preview-screen").forEach((screen) => {
       const virtual = Number(screen.dataset.virtualTileHeight || 0);

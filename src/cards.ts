@@ -187,7 +187,9 @@ class EchoCameraWall extends HTMLElement {
     const gap = 6;
     const minimumWidth = Number(this.config.min_tile_width || 180);
     const maxColumns = Math.min(count, Math.max(1, Math.floor((width + gap) / (minimumWidth + gap))));
-    const availableHeight = window.innerHeight - wall.getBoundingClientRect().top - 8;
+    const availableHeight = Number(this.config.preview_height) > 0
+      ? Number(this.config.preview_height)
+      : window.innerHeight - wall.getBoundingClientRect().top - 8;
     const layoutHeight = compact ? Math.min(availableHeight, window.innerHeight * 0.44) : availableHeight;
     const spansFor = (columns: number) => {
       const spans = this.cameras().map((camera: any) => Math.min(columns, Math.max(1, Number(camera?.span) || 1)));
