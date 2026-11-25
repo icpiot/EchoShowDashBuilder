@@ -892,8 +892,8 @@ class EchoShowEditor extends HTMLElement {
       #setup-library .row button{white-space:nowrap}
       @media(min-width:1101px) and (max-width:1450px){.section-nav{width:154px;margin-left:14px;margin-right:16px}.section{margin-left:188px;margin-right:16px}.menus-workspace{grid-template-columns:minmax(145px,160px) minmax(0,1fr) minmax(180px,200px);gap:10px}.menu-workspace-list,.menu-preview-panel{padding:13px}.menu-config{padding:8px}.menu-config>.row,.menu-config>.hint,.menu-config>.content-picker,.menu-config>.card-picker,.menu-config>.visual-layout{margin-left:9px;margin-right:9px}}
       @media(max-width:1100px){.menus-workspace{grid-template-columns:minmax(155px,190px) minmax(0,1fr)}.menu-preview-panel{grid-column:1/-1;position:static}}
-      .menus-workspace>.custom-card-holder{grid-column:1;width:auto;margin:0}.menus-workspace>.custom-card-holder[open]{padding-bottom:12px}
-      @media(max-width:900px){.section{margin:0 16px}.menus-workspace{grid-template-columns:1fr}.menu-preview-panel{grid-column:auto}.menus-workspace>.custom-card-holder{grid-column:auto}}
+      .menu-workspace-list>.custom-card-holder{margin-top:14px;padding:12px;width:auto}.menu-workspace-list>.custom-card-holder[open]{padding-bottom:12px}
+      @media(max-width:900px){.section{margin:0 16px}.menus-workspace{grid-template-columns:1fr}.menu-preview-panel{grid-column:auto}}
       @media(max-width:560px){.camera-settings-row{grid-template-columns:1fr}#setup-library .row button{white-space:normal}}
       .quick-steps{grid-template-columns:repeat(5,minmax(0,1fr))}
       .quick-steps li:not(:last-child)::after{right:calc(-50% + 20px)}
@@ -911,8 +911,8 @@ class EchoShowEditor extends HTMLElement {
       .echo-preview-nav span{padding:4px 2px}
       .echo-preview-content{min-height:0;flex:1;padding:8px;overflow:auto}.echo-preview-content::-webkit-scrollbar{width:7px}.echo-preview-content{scrollbar-width:thin}.preview-scroll-hint{display:block;position:sticky;bottom:0;padding:4px 6px;border-radius:5px;background:#eef0ff;color:#4e5980}
       .echo-preview-content>strong{font-size:.78rem}
-      .echo-preview-tiles{gap:4px;margin-top:5px}
-      .echo-preview-tiles span{min-height:20px;padding:3px;font-size:.58rem}
+      .echo-preview-tiles{grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;margin-top:5px}
+      .echo-preview-tiles span{min-height:0;aspect-ratio:16/9;padding:3px;font-size:.58rem}
       .echo-preview-content small{margin-top:4px;font-size:.62rem}
       .deployment-device-screen{aspect-ratio:16/10;min-height:0;box-sizing:border-box;padding:clamp(8px,2vw,18px)}
       .device-menu-grid{gap:7px;margin:12px 0}
@@ -960,7 +960,7 @@ class EchoShowEditor extends HTMLElement {
     const includedItems = menuEditor?.querySelector<HTMLElement>("[data-included-items]");
     if (includedItems) (selectedMenuCard?.querySelector(".content-picker") || selectedMenuCard)?.before(includedItems);
     const cardLibrarySection = root.querySelector<HTMLElement>(".custom-card-holder");
-    if (menuSection && cardLibrarySection) menuSection.querySelector(".menus-workspace")?.append(cardLibrarySection);
+    if (menuSection && cardLibrarySection) menuSection.querySelector(".menu-workspace-list")?.append(cardLibrarySection);
     const libraryHeading = cardLibrarySection?.querySelector("summary");
     if (libraryHeading) libraryHeading.textContent = `Content Library (${cardLibrary.length})`;
     const menuHeading = menuSection?.querySelector("h3");
