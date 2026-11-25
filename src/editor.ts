@@ -842,7 +842,7 @@ class EchoShowEditor extends HTMLElement {
       // The dialog renders an 800px-wide scaled canvas; apply the same 800/1280
       // factor to the virtual Show 8 row height so fit mode remains faithful.
       const renderedTileHeight = Math.floor(best.height * 0.625);
-      return `<div class="echo-preview-screen"><div class="echo-preview-nav"><div class="preview-control-group left">${controls(leftControls)}</div><div class="echo-preview-menu-buttons">${menuProfiles.map((item) => `<span class="${item.id === menu?.id ? "active" : ""}">${escapeHtml(item.label)}</span>`).join("")}</div><div class="preview-control-group right">${controls(rightControls)}</div></div><div class="echo-preview-content"><strong>${escapeHtml(menu?.label || "No menu selected")}</strong><div class="echo-preview-tiles preview-cols-${best.columns}" style="--preview-tile-height:${renderedTileHeight}px">${tileMarkup || `<span>No content selected</span>`}</div>${tiles.length ? `<small class="preview-scroll-hint">The preview scales the full configured layout; scroll only if the rendered frame shows an overflow bar.</small>` : ""}</div></div>`;
+      return `<div class="echo-preview-screen" data-virtual-tile-height="${Math.floor(best.height)}"><div class="echo-preview-nav"><div class="preview-control-group left">${controls(leftControls)}</div><div class="echo-preview-menu-buttons">${menuProfiles.map((item) => `<span class="${item.id === menu?.id ? "active" : ""}">${escapeHtml(item.label)}</span>`).join("")}</div><div class="preview-control-group right">${controls(rightControls)}</div></div><div class="echo-preview-content"><strong>${escapeHtml(menu?.label || "No menu selected")}</strong><div class="echo-preview-tiles preview-cols-${best.columns}" style="--preview-tile-height:${renderedTileHeight}px">${tileMarkup || `<span>No content selected</span>`}</div>${tiles.length ? `<small class="preview-scroll-hint">The preview scales the full configured layout; scroll only if the rendered frame shows an overflow bar.</small>` : ""}</div></div>`;
     };
     const includedItemsMarkup = (menu?: EchoMenuConfig) => {
       const ids = menu?.source === "lovelace_card" ? menu.lovelace_card_ids || [] : orderedMenuCameras(menu).concat(menu?.lights || [], menu?.temperatures || []);
@@ -985,6 +985,14 @@ class EchoShowEditor extends HTMLElement {
     const menuSection = root.querySelector<HTMLElement>("#dashboard-content");
     menuSection?.querySelector(".menus-workspace")?.insertAdjacentHTML("beforeend", `<aside class="menu-preview-panel"><div class="panel-heading"><div><span class="eyebrow">PREVIEW</span><h4>Menu layout</h4></div></div><p class="hint">A scaled Show 8 preview using the draft menu layout.</p><div data-menu-preview>${menuPreviewMarkup(selectedMenu)}</div><button type="button" id="open-large-preview" class="secondary-action">Open large preview</button><div class="preview-note">The Echo uses the selected device and its available entities when this Dash is applied.</div></aside>`);
     root.innerHTML += `<div id="large-preview-dialog" class="builder-dialog" hidden role="dialog" aria-modal="true" aria-labelledby="large-preview-title"><div class="large-preview-card"><div class="panel-heading"><h3 id="large-preview-title">Show 8 layout preview</h3><button type="button" id="close-large-preview" aria-label="Close preview">×</button></div><div id="large-preview-content"></div></div></div>`;
+    const scalePreviewScreens = (scope: ParentNode = root) => scope.querySelectorAll<HTMLElement>(".echo-preview-screen").forEach((screen) => {
+      const virtual = Number(screen.dataset.virtualTileHeight || 0);
+      const tiles = screen.querySelector<HTMLElement>(".echo-preview-tiles");
+      if (virtual && tiles) tiles.style.setProperty("--preview-tile-height", `${Math.max(40, Math.floor(virtual * Math.min(1, screen.clientWidth / 1280)))}px`);
+    });
+    const previewResizeObserver = new ResizeObserver(() => scalePreviewScreens());
+    root.querySelectorAll<HTMLElement>(".echo-preview-screen").forEach((screen) => previewResizeObserver.observe(screen));
+    scalePreviewScreens();
     menuSection?.querySelectorAll<HTMLDetailsElement>("[data-menu-card]").forEach((card) => {
       card.hidden = card.dataset.menuCard !== this.selectedMenuId;
       if (!card.hidden) card.open = true;
@@ -1087,6 +1095,7 @@ class EchoShowEditor extends HTMLElement {
       const preview = root.querySelector<HTMLElement>("[data-menu-preview]");
       if (!dialog || !content || !preview) return;
       content.innerHTML = preview.innerHTML;
+      scalePreviewScreens(content);
       dialog.hidden = false;
       root.querySelector<HTMLButtonElement>("#close-large-preview")?.focus();
     };
@@ -1114,7 +1123,7 @@ class EchoShowEditor extends HTMLElement {
       });
       const preview = root.querySelector<HTMLElement>("[data-menu-preview]");
       const currentMenu = menuProfiles.find((menu) => menu.id === this.selectedMenuId);
-      if (preview) preview.innerHTML = menuPreviewMarkup(currentMenu);
+      if (preview) { preview.innerHTML = menuPreviewMarkup(currentMenu); scalePreviewScreens(preview); preview.querySelectorAll<HTMLElement>(".echo-preview-screen").forEach((screen) => previewResizeObserver.observe(screen)); }
       const selectedHeading = root.querySelector<HTMLElement>("[data-selected-menu-heading] h4");
       if (selectedHeading) selectedHeading.textContent = currentMenu?.label || "Choose a menu";
       const included = root.querySelector<HTMLElement>("[data-included-items]");
