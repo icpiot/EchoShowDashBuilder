@@ -945,7 +945,7 @@ class EchoShowEditor extends HTMLElement {
       .echo-preview-screen{aspect-ratio:16/10;min-height:0;box-sizing:border-box;display:flex;flex-direction:column}
       .echo-preview-nav{flex:none;padding:5px 6px}
       .echo-preview-nav span{padding:4px 2px}
-      .echo-preview-content{min-height:0;flex:1;padding:8px;overflow:auto}.echo-preview-content::-webkit-scrollbar{width:7px}.echo-preview-content{scrollbar-width:thin}.preview-scroll-hint{display:block;position:sticky;bottom:0;padding:4px 6px;border-radius:5px;background:#eef0ff;color:#4e5980}
+      .echo-preview-content{min-height:0;flex:1;padding:8px;overflow:auto}.echo-preview-content::-webkit-scrollbar{width:7px}.echo-preview-content{scrollbar-width:thin}.preview-scroll-hint{display:block;position:static;padding:4px 6px;border-radius:5px;background:#eef0ff;color:#4e5980}
       .echo-preview-content>strong{font-size:.78rem}
       .echo-preview-tiles{grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;margin-top:5px}
       .echo-preview-tiles.preview-cols-1{grid-template-columns:1fr}.echo-preview-tiles.preview-cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}.echo-preview-tiles span{min-height:0;aspect-ratio:16/9;padding:3px;font-size:.58rem;position:relative}.echo-preview-tiles span.span-2{grid-column:span 2}.echo-preview-tiles span.span-3{grid-column:span 3}.echo-preview-tiles span img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#090b0d;opacity:.72}.echo-preview-tiles span b{position:relative;z-index:1;padding:2px 4px;border-radius:3px;background:#0009;color:#fff;font-size:.58rem}
