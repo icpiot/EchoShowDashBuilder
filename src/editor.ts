@@ -814,7 +814,7 @@ class EchoShowEditor extends HTMLElement {
       // fit-mode spans change with the draft rather than being decorative.
       // Compute at the physical Show 8 landscape canvas, then CSS scales the
       // result into the side rail or large-preview dialog.
-      const previewWidth = 1280, previewHeight = 800, gap = 6;
+      const previewWidth = 1280, previewHeight = 700, gap = 6;
       const compact = Boolean(this.config.compact);
       const minWidth = Number(this.config.min_tile_width || 180);
       const maxColumns = Math.min(Math.max(1, tiles.length), Math.max(1, Math.floor((previewWidth + gap) / (minWidth + gap))));
@@ -841,10 +841,9 @@ class EchoShowEditor extends HTMLElement {
       const rightControls = [...menuToggles.filter((item) => item.placement === "right"), ...menuStatuses.filter((item) => item.placement === "right")].sort((a,b) => Number(a.order||0)-Number(b.order||0));
       const controls = (items: any[]) => items.map((item) => `<span class="preview-control">${escapeHtml(item.label || (item.type === "time" ? "Time" : "Status"))}</span>`).join("") || `<span class="preview-control">—</span>`;
       const tileMarkup = tiles.map((tile, index) => `<span style="grid-column:span ${best.spans[index] || 1}" class="preview-tile-${tile.kind}">${tile.kind === "camera" && tile.image ? `<img src="${escapeHtml(tile.image)}" alt="">` : ""}<b>${escapeHtml(tile.label)}</b></span>`).join("");
-      // The dialog renders an 800px-wide scaled canvas; apply the same 800/1280
-      // factor to the virtual Show 8 row height so fit mode remains faithful.
+      // Scale the virtual Show 8 row height into the rendered preview.
       const renderedTileHeight = Math.floor(best.height * 0.625);
-      return `<div class="echo-preview-screen" data-virtual-tile-height="${Math.floor(best.height)}"><div class="echo-preview-nav"><div class="preview-control-group left">${controls(leftControls)}</div><div class="echo-preview-menu-buttons">${menuProfiles.map((item) => `<span class="${item.id === menu?.id ? "active" : ""}">${escapeHtml(item.label)}</span>`).join("")}</div><div class="preview-control-group right">${controls(rightControls)}</div></div><div class="echo-preview-content"><strong>${escapeHtml(menu?.label || "No menu selected")}</strong><div class="echo-preview-tiles preview-cols-${best.columns}" style="--preview-tile-height:${renderedTileHeight}px">${tileMarkup || `<span>No content selected</span>`}</div>${tiles.length ? `<small class="preview-scroll-hint">The preview scales the full configured layout; scroll only if the rendered frame shows an overflow bar.</small>` : ""}</div></div>`;
+      return `<div class="echo-preview-screen" data-virtual-tile-height="${Math.floor(best.height)}"><div class="echo-preview-nav"><div class="preview-control-group left">${controls(leftControls)}</div><div class="echo-preview-menu-buttons">${menuProfiles.map((item) => `<span class="${item.id === menu?.id ? "active" : ""}">${escapeHtml(item.label)}</span>`).join("")}</div><div class="preview-control-group right">${controls(rightControls)}</div></div><div class="echo-preview-content"><strong>${escapeHtml(menu?.label || "No menu selected")}</strong><div class="echo-preview-tiles preview-cols-${best.columns}" style="--preview-tile-height:${renderedTileHeight}px">${tileMarkup || `<span>No content selected</span>`}</div></div></div>`;
     };
     const includedItemsMarkup = (menu?: EchoMenuConfig) => {
       const ids = menu?.source === "lovelace_card" ? menu.lovelace_card_ids || [] : orderedMenuCameras(menu).concat(menu?.lights || [], menu?.temperatures || []);
@@ -985,8 +984,7 @@ class EchoShowEditor extends HTMLElement {
       `;
       root.querySelector(".section-nav")?.insertAdjacentHTML("beforebegin", `<header class="builder-app-header"><div class="brand-mark" aria-hidden="true"><span></span><span></span></div><div class="brand-copy"><strong>Echo Dash Builder</strong><small>Dashboard workspace</small></div><div class="header-spacer"></div><span class="header-dash-name">${escapeHtml(savedProfiles.find((profile) => profile.id === selectedProfileId)?.name || "Choose a Dash")}</span><button type="button" id="header-save-profile" ${selectedProfileId ? "" : "disabled"}>Save Draft</button><button type="button" data-section-target="menus">Edit menus</button><button type="button" data-section-target="deployment" class="primary-action">Review deployment <span aria-hidden="true">↗</span></button></header>`);
     const menuSection = root.querySelector<HTMLElement>("#dashboard-content");
-    menuSection?.querySelector(".menus-workspace")?.insertAdjacentHTML("beforeend", `<aside class="menu-preview-panel"><div class="panel-heading"><div><span class="eyebrow">PREVIEW</span><h4>Menu layout</h4></div></div><p class="hint">A scaled Show 8 preview using the draft menu layout.</p><div data-menu-preview>${menuPreviewMarkup(selectedMenu)}</div><button type="button" id="open-large-preview" class="secondary-action">Open large preview</button><div class="preview-note">The Echo uses the selected device and its available entities when this Dash is applied.</div></aside>`);
-    root.innerHTML += `<div id="large-preview-dialog" class="builder-dialog" hidden role="dialog" aria-modal="true" aria-labelledby="large-preview-title"><div class="large-preview-card"><div class="panel-heading"><h3 id="large-preview-title">Show 8 layout preview</h3><button type="button" id="close-large-preview" aria-label="Close preview">×</button></div><div id="large-preview-content"></div></div></div>`;
+    menuSection?.querySelector(".menus-workspace")?.insertAdjacentHTML("beforeend", `<aside class="menu-preview-panel"><div class="panel-heading"><div><span class="eyebrow">PREVIEW</span><h4>Menu layout</h4></div></div><p class="hint">A scaled Show 8 preview using the draft menu layout.</p><div data-menu-preview>${menuPreviewMarkup(selectedMenu)}</div><div class="preview-note">The Echo uses the selected device and its available entities when this Dash is applied.</div></aside>`);
     const scalePreviewScreens = (scope: ParentNode = root) => scope.querySelectorAll<HTMLElement>(".echo-preview-screen").forEach((screen) => {
       const virtual = Number(screen.dataset.virtualTileHeight || 0);
       const tiles = screen.querySelector<HTMLElement>(".echo-preview-tiles");
@@ -1091,21 +1089,6 @@ class EchoShowEditor extends HTMLElement {
       if (scroll) root.querySelector<HTMLElement>(`#${pageSections[page][0]}`)?.scrollIntoView({ block: "start" });
     };
     root.querySelectorAll<HTMLButtonElement>("[data-section-target]").forEach((button) => button.addEventListener("click", () => selectPage(button.dataset.sectionTarget || "", true)));
-    const openLargePreview = () => {
-      const dialog = root.querySelector<HTMLElement>("#large-preview-dialog");
-      const content = root.querySelector<HTMLElement>("#large-preview-content");
-      const preview = root.querySelector<HTMLElement>("[data-menu-preview]");
-      if (!dialog || !content || !preview) return;
-      content.innerHTML = preview.innerHTML;
-      scalePreviewScreens(content);
-      content.querySelectorAll<HTMLElement>(".echo-preview-screen").forEach((screen) => previewResizeObserver.observe(screen));
-      dialog.hidden = false;
-      root.querySelector<HTMLButtonElement>("#close-large-preview")?.focus();
-    };
-    root.querySelector<HTMLButtonElement>("#open-large-preview")?.addEventListener("click", openLargePreview);
-    root.querySelector<HTMLButtonElement>("#close-large-preview")?.addEventListener("click", () => { const dialog = root.querySelector<HTMLElement>("#large-preview-dialog"); if (dialog) dialog.hidden = true; });
-    root.querySelector<HTMLElement>("#large-preview-dialog")?.addEventListener("keydown", (event) => { if ((event as KeyboardEvent).key === "Escape") (event.currentTarget as HTMLElement).hidden = true; });
-    root.querySelector<HTMLElement>("#large-preview-dialog")?.addEventListener("click", (event) => { if (event.target === event.currentTarget) (event.currentTarget as HTMLElement).hidden = true; });
     root.querySelector<HTMLButtonElement>("#header-save-profile")?.addEventListener("click", () => root.querySelector<HTMLButtonElement>("#save-profile")?.click());
     root.querySelectorAll<HTMLButtonElement>("[data-profile-tile]").forEach((button) => button.addEventListener("click", () => {
       const select = root.querySelector<HTMLSelectElement>("#saved-profile");
