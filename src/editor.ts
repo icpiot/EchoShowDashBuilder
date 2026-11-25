@@ -988,7 +988,9 @@ class EchoShowEditor extends HTMLElement {
     // Reuse the registered runtime camera-wall element for the preview wall so
     // image containment, labels, detection presentation and native tile sizing
     // come from the same component used by the generated dashboard.
-    const mountRuntimePreview = (menu: EchoMenuConfig | undefined) => {
+    let previewGeneration = 0;
+    const mountRuntimePreview = async (menu: EchoMenuConfig | undefined) => {
+      const generation = ++previewGeneration;
       const runtimePreview = menuSection?.querySelector<HTMLElement>("[data-menu-preview]");
       const runtimeHost = runtimePreview?.querySelector<HTMLElement>(".echo-preview-content");
       const runtimeScreen = runtimePreview?.querySelector<HTMLElement>(".echo-preview-screen");
@@ -1009,9 +1011,15 @@ class EchoShowEditor extends HTMLElement {
       if (runtimeLights.length && customElements.get("echo-light-controls")) contentCards.push({ type: "custom:echo-light-controls", lights: runtimeLights });
       const runtimeTemperatures = (menu?.temperatures || []).map((id) => temperatures.find((item: any) => String(item.entity_id) === String(id))).filter(Boolean).map((item: any) => ({ entity: String(item.entity_id), label: String(item.attributes?.friendly_name || item.entity_id) }));
       if (runtimeTemperatures.length && customElements.get("echo-temperature-readings")) contentCards.push({ type: "custom:echo-temperature-readings", sensors: runtimeTemperatures });
+      let resolvedCards: Record<string, Record<string, unknown>> = {};
       if (menu?.source === "lovelace_card" && Array.isArray(menu.lovelace_card_ids)) {
+        try { resolvedCards = await this.resolveLovelaceCards(this.config, [menu]); }
+        catch (error) {
+          const message = document.createElement("div"); message.className = "preview-note"; message.textContent = `Custom cards unavailable: ${String(error).replace(/^Error:\s*/, "")}`; runtimeContentPlaceholder(runtimeHost, message);
+        }
+        if (generation !== previewGeneration) return;
         const cards = menu.lovelace_card_ids.map((id: string, index: number) => {
-          const card = this.config.lovelace_cards?.[id];
+          const card = resolvedCards[id];
           const layout = menu.lovelace_card_layouts?.[id] || {};
           return card ? { id, config: card, order: Number(layout.order) || index + 1, width: Number(layout.width) || 1, height: Number(layout.height) || 1 } : null;
         }).filter(Boolean).sort((a: any, b: any) => a.order - b.order);
@@ -1026,19 +1034,6 @@ class EchoShowEditor extends HTMLElement {
       runtimeHost.append(runtimeContent);
       for (const cardConfig of contentCards) {
         const type = String(cardConfig.type || "");
-        if (type === "custom:echo-card-layout" && Array.isArray((cardConfig as any).cards)) {
-          const grid = document.createElement("div"); grid.style.display = "grid"; grid.style.gridTemplateColumns = "repeat(3,minmax(0,1fr))"; grid.style.gap = "6px";
-          for (const item of (cardConfig as any).cards) {
-            const config = item?.config || {}; const cardType = String(config.type || "");
-            const cardTag = cardType.startsWith("custom:") ? cardType.slice(7).replace(/_/g, "-") : "";
-            if (!cardTag || !customElements.get(cardTag)) continue;
-            const holder = document.createElement("div"); holder.style.gridColumn = `span ${Math.max(1, Math.min(3, Number(item.width) || 1))}`; holder.style.minHeight = `${Math.max(104, 104 * Math.max(1, Math.min(2, Number(item.height) || 1)))}px`;
-            const card = document.createElement(cardTag) as HTMLElement & { setConfig?: (config: unknown) => void; hass?: unknown };
-            card.inert = true; card.style.pointerEvents = "none"; card.style.display = "block"; card.style.height = "100%"; card.setConfig?.(config); card.hass = this._hass; holder.append(card); grid.append(holder);
-          }
-          if (grid.childElementCount) runtimeContent.append(grid);
-          continue;
-        }
         const tag = type === "custom:echo-camera-wall" ? "echo-camera-wall" : type === "custom:echo-light-controls" ? "echo-light-controls" : type === "custom:echo-temperature-readings" ? "echo-temperature-readings" : type === "custom:echo-card-layout" ? "echo-card-layout" : "";
         if (!tag || !customElements.get(tag)) continue;
         const card = document.createElement(tag) as HTMLElement & { setConfig?: (config: unknown) => void; hass?: unknown };
@@ -1046,7 +1041,8 @@ class EchoShowEditor extends HTMLElement {
         card.setConfig?.(cardConfig); card.hass = this._hass; runtimeContent.append(card);
       }
     };
-    mountRuntimePreview(selectedMenu);
+    const runtimeContentPlaceholder = (host: HTMLElement, node: HTMLElement) => { host.append(node); };
+    void mountRuntimePreview(selectedMenu);
     const scalePreviewScreens = (scope: ParentNode = root) => scope.querySelectorAll<HTMLElement>(".echo-preview-screen").forEach((screen) => {
       const virtual = Number(screen.dataset.virtualTileHeight || 0);
       const tiles = screen.querySelector<HTMLElement>(".echo-preview-tiles");
@@ -1171,7 +1167,7 @@ class EchoShowEditor extends HTMLElement {
       });
       const preview = root.querySelector<HTMLElement>("[data-menu-preview]");
       const currentMenu = menuProfiles.find((menu) => menu.id === this.selectedMenuId);
-      if (preview) { preview.innerHTML = menuPreviewMarkup(currentMenu); scalePreviewScreens(preview); preview.querySelectorAll<HTMLElement>(".echo-preview-screen").forEach((screen) => previewResizeObserver.observe(screen)); mountRuntimePreview(currentMenu); }
+      if (preview) { preview.innerHTML = menuPreviewMarkup(currentMenu); scalePreviewScreens(preview); preview.querySelectorAll<HTMLElement>(".echo-preview-screen").forEach((screen) => previewResizeObserver.observe(screen)); void mountRuntimePreview(currentMenu); }
       const selectedHeading = root.querySelector<HTMLElement>("[data-selected-menu-heading] h4");
       if (selectedHeading) selectedHeading.textContent = currentMenu?.label || "Choose a menu";
       const included = root.querySelector<HTMLElement>("[data-included-items]");
@@ -1731,7 +1727,7 @@ class EchoShowEditor extends HTMLElement {
       next[input.dataset.span || ""] = Number(input.value);
       this.emit({ camera_spans: next }, false);
       const preview = root.querySelector<HTMLElement>("[data-menu-preview]");
-      if (preview) { const current = this.getCurrentConfig().menus.find((menu: EchoMenuConfig) => menu.id === this.selectedMenuId); preview.innerHTML = menuPreviewMarkup(current); mountRuntimePreview(current); }
+      if (preview) { const current = this.getCurrentConfig().menus.find((menu: EchoMenuConfig) => menu.id === this.selectedMenuId); preview.innerHTML = menuPreviewMarkup(current); void mountRuntimePreview(current); }
     }));
     root.querySelectorAll<HTMLSelectElement>("[data-camera-refresh]").forEach((input) => input.addEventListener("change", () => {
       const next = { ...(this.config.camera_refresh_intervals || {}) };
