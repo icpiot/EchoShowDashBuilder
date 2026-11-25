@@ -1096,6 +1096,7 @@ class EchoShowEditor extends HTMLElement {
       if (!dialog || !content || !preview) return;
       content.innerHTML = preview.innerHTML;
       scalePreviewScreens(content);
+      content.querySelectorAll<HTMLElement>(".echo-preview-screen").forEach((screen) => previewResizeObserver.observe(screen));
       dialog.hidden = false;
       root.querySelector<HTMLButtonElement>("#close-large-preview")?.focus();
     };
