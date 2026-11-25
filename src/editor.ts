@@ -942,10 +942,10 @@ class EchoShowEditor extends HTMLElement {
       #menu-controls .toggle-config select{width:100%}
       @media(max-width:900px){.quick-steps{grid-template-columns:repeat(5,minmax(0,1fr))}}
       @media(max-width:560px){.quick-steps{grid-template-columns:1fr}.quick-steps li:not(:last-child)::after{display:none}}
-      .echo-preview-screen{aspect-ratio:16/10;min-height:0;box-sizing:border-box;display:flex;flex-direction:column}
-      .echo-preview-nav{flex:none;padding:5px 6px}
+      .echo-preview-screen{aspect-ratio:16/10;min-height:0;box-sizing:border-box;display:flex;flex-direction:column;background:#17191f;border-radius:18px;overflow:hidden}
+      .echo-preview-nav{flex:none;padding:0;background:#20252b;min-height:calc(46px * var(--preview-scale,.6));display:flex;align-items:stretch}
       .echo-preview-nav span{padding:4px 2px}
-      .echo-preview-content{min-height:0;flex:1;padding:8px;overflow:auto}.echo-preview-content::-webkit-scrollbar{width:7px}.echo-preview-content{scrollbar-width:thin}.preview-scroll-hint{display:block;position:static;padding:4px 6px;border-radius:5px;background:#eef0ff;color:#4e5980}.runtime-preview-wall{display:block;width:100%;min-height:0}.runtime-preview-wall~.echo-preview-tiles{display:none}
+      .echo-preview-content{min-height:0;flex:1;padding:4px;overflow:auto;background:#17191f}.echo-preview-content::-webkit-scrollbar{width:7px}.echo-preview-content{scrollbar-width:thin}.preview-scroll-hint{display:block;position:static;padding:4px 6px;border-radius:5px;background:#eef0ff;color:#4e5980}.runtime-preview-menu{display:block;width:100%;flex:none;background:#20252b}.runtime-preview-menu .menu-bar{width:100%;max-width:none;margin:0;padding:0 4px;gap:4px;background:#20252b}.runtime-preview-menu .menu-bar button{min-height:calc(46px * var(--preview-scale,.6));padding:calc(8px * var(--preview-scale,.6)) calc(10px * var(--preview-scale,.6));font-size:clamp(8px,calc(18px * var(--preview-scale,.6)),18px);border-radius:calc(10px * var(--preview-scale,.6))}.runtime-preview-wall{display:block;width:100%;min-height:0}.runtime-preview-wall~.echo-preview-tiles{display:none}
       .echo-preview-content>strong{font-size:.78rem}
       .echo-preview-tiles{grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;margin-top:5px}
       .echo-preview-tiles.preview-cols-1{grid-template-columns:1fr}.echo-preview-tiles.preview-cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}.echo-preview-tiles span{min-height:0;aspect-ratio:16/9;padding:3px;font-size:.58rem;position:relative}.echo-preview-tiles span.span-2{grid-column:span 2}.echo-preview-tiles span.span-3{grid-column:span 3}.echo-preview-tiles span img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#090b0d;opacity:.72}.echo-preview-tiles span b{position:relative;z-index:1;padding:2px 4px;border-radius:3px;background:#0009;color:#fff;font-size:.58rem}
@@ -1043,13 +1043,16 @@ class EchoShowEditor extends HTMLElement {
         card.style.minWidth = "0"; card.style.display = "block"; card.inert = true; card.style.pointerEvents = "none";
         card.setConfig?.(cardConfig); card.hass = this._hass; runtimeContent.append(card);
       }
+      scalePreviewScreens(runtimePreview || root);
     };
     const runtimeContentPlaceholder = (host: HTMLElement, node: HTMLElement) => { host.append(node); };
     void mountRuntimePreview(selectedMenu);
     const scalePreviewScreens = (scope: ParentNode = root) => scope.querySelectorAll<HTMLElement>(".echo-preview-screen").forEach((screen) => {
+      const scale = Math.min(1, Math.max(.2, screen.clientWidth / 1280));
+      screen.style.setProperty("--preview-scale", String(scale));
       const virtual = Number(screen.dataset.virtualTileHeight || 0);
       const tiles = screen.querySelector<HTMLElement>(".echo-preview-tiles");
-      if (virtual && tiles) tiles.style.setProperty("--preview-tile-height", `${Math.max(40, Math.floor(virtual * Math.min(1, screen.clientWidth / 1280)))}px`);
+      if (virtual && tiles) tiles.style.setProperty("--preview-tile-height", `${Math.max(40, Math.floor(virtual * scale))}px`);
     });
     const previewResizeObserver = new ResizeObserver(() => scalePreviewScreens());
     root.querySelectorAll<HTMLElement>(".echo-preview-screen").forEach((screen) => previewResizeObserver.observe(screen));
