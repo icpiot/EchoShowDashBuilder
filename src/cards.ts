@@ -180,7 +180,7 @@ class EchoCameraWall extends HTMLElement {
   private updateLayout() {
     const wall = this.shadowRoot?.querySelector('.wall') as HTMLElement | null;
     if (!wall) return;
-    const width = this.clientWidth || 600;
+    const width = Number(this.config.preview_width) > 0 ? Number(this.config.preview_width) : (this.clientWidth || 600);
     const count = this.cameras().length;
     const compact = Boolean(this.config.compact);
     wall.classList.toggle('compact', compact);

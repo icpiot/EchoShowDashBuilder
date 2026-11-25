@@ -988,22 +988,19 @@ class EchoShowEditor extends HTMLElement {
     // Reuse the registered runtime camera-wall element for the preview wall so
     // image containment, labels, detection presentation and native tile sizing
     // come from the same component used by the generated dashboard.
-    const runtimePreview = menuSection?.querySelector<HTMLElement>("[data-menu-preview]");
-    const runtimeHost = runtimePreview?.querySelector<HTMLElement>(".echo-preview-content");
-    const runtimeCameras = orderedMenuCameras(selectedMenu).map((id) => {
-      const camera = cameras.find((item) => item.entityId === id);
-      return camera ? { entity: camera.entityId, label: camera.label, span: this.config.camera_spans?.[id], name_overlay: this.config.camera_overlays?.[id], refresh_interval: this.config.camera_refresh_intervals?.[id] || this.config.camera_refresh_interval || 3000, detections: this.config.camera_detections?.[id] || [] } : null;
-    }).filter(Boolean);
-    if (runtimeHost && runtimeCameras.length && customElements.get("echo-camera-wall")) {
-      runtimeHost.querySelector<HTMLElement>(".echo-preview-tiles")?.style.setProperty("display", "none");
-      const wall = document.createElement("echo-camera-wall") as HTMLElement & { setConfig?: (config: unknown) => void; hass?: unknown };
-      wall.className = "runtime-preview-wall";
-      wall.inert = true;
-      wall.style.pointerEvents = "none";
-      wall.setConfig?.({ cameras: runtimeCameras, preview_height: 700, compact: Boolean((selectedMenu?.lights || []).length || (selectedMenu?.temperatures || []).length), detection_types: this.config.detection_types || [] });
-      wall.hass = this._hass;
-      runtimeHost.append(wall);
-    }
+    const mountRuntimePreview = (menu: EchoMenuConfig | undefined) => {
+      const runtimePreview = menuSection?.querySelector<HTMLElement>("[data-menu-preview]");
+      const runtimeHost = runtimePreview?.querySelector<HTMLElement>(".echo-preview-content");
+      const runtimeCameras = orderedMenuCameras(menu).map((id) => { const camera = cameras.find((item) => item.entityId === id); return camera ? { entity: camera.entityId, label: camera.label, span: this.config.camera_spans?.[id], name_overlay: this.config.camera_overlays?.[id], refresh_interval: this.config.camera_refresh_intervals?.[id] || this.config.camera_refresh_interval || 3000, detections: this.config.camera_detections?.[id] || [] } : null; }).filter(Boolean);
+      if (runtimeHost && runtimeCameras.length && customElements.get("echo-camera-wall")) {
+        runtimeHost.querySelector<HTMLElement>(".echo-preview-tiles")?.style.setProperty("display", "none");
+        runtimeHost.querySelector("echo-camera-wall")?.remove();
+        const wall = document.createElement("echo-camera-wall") as HTMLElement & { setConfig?: (config: unknown) => void; hass?: unknown };
+        wall.className = "runtime-preview-wall"; wall.inert = true; wall.style.pointerEvents = "none";
+        wall.setConfig?.({ cameras: runtimeCameras, preview_height: 700, preview_width: 1280, compact: Boolean((menu?.lights || []).length || (menu?.temperatures || []).length), detection_types: this.config.detection_types || [] }); wall.hass = this._hass; runtimeHost.append(wall);
+      }
+    };
+    mountRuntimePreview(selectedMenu);
     const scalePreviewScreens = (scope: ParentNode = root) => scope.querySelectorAll<HTMLElement>(".echo-preview-screen").forEach((screen) => {
       const virtual = Number(screen.dataset.virtualTileHeight || 0);
       const tiles = screen.querySelector<HTMLElement>(".echo-preview-tiles");
@@ -1128,7 +1125,7 @@ class EchoShowEditor extends HTMLElement {
       });
       const preview = root.querySelector<HTMLElement>("[data-menu-preview]");
       const currentMenu = menuProfiles.find((menu) => menu.id === this.selectedMenuId);
-      if (preview) { preview.innerHTML = menuPreviewMarkup(currentMenu); scalePreviewScreens(preview); preview.querySelectorAll<HTMLElement>(".echo-preview-screen").forEach((screen) => previewResizeObserver.observe(screen)); }
+      if (preview) { preview.innerHTML = menuPreviewMarkup(currentMenu); scalePreviewScreens(preview); preview.querySelectorAll<HTMLElement>(".echo-preview-screen").forEach((screen) => previewResizeObserver.observe(screen)); mountRuntimePreview(currentMenu); }
       const selectedHeading = root.querySelector<HTMLElement>("[data-selected-menu-heading] h4");
       if (selectedHeading) selectedHeading.textContent = currentMenu?.label || "Choose a menu";
       const included = root.querySelector<HTMLElement>("[data-included-items]");
@@ -1688,7 +1685,7 @@ class EchoShowEditor extends HTMLElement {
       next[input.dataset.span || ""] = Number(input.value);
       this.emit({ camera_spans: next }, false);
       const preview = root.querySelector<HTMLElement>("[data-menu-preview]");
-      if (preview) preview.innerHTML = menuPreviewMarkup(this.getCurrentConfig().menus.find((menu: EchoMenuConfig) => menu.id === this.selectedMenuId));
+      if (preview) { const current = this.getCurrentConfig().menus.find((menu: EchoMenuConfig) => menu.id === this.selectedMenuId); preview.innerHTML = menuPreviewMarkup(current); mountRuntimePreview(current); }
     }));
     root.querySelectorAll<HTMLSelectElement>("[data-camera-refresh]").forEach((input) => input.addEventListener("change", () => {
       const next = { ...(this.config.camera_refresh_intervals || {}) };
