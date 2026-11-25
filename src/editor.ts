@@ -951,7 +951,7 @@ class EchoShowEditor extends HTMLElement {
       .deployment-device-screen{aspect-ratio:16/10;min-height:0;box-sizing:border-box;padding:clamp(8px,2vw,18px)}
       .device-menu-grid{gap:7px;margin:12px 0}
       .device-menu-grid>div{min-height:0;padding:7px}
-      @media(min-width:1101px) and (max-width:1450px){.menus-workspace{grid-template-columns:minmax(125px,145px) minmax(0,1fr) minmax(220px,235px)}}
+      @media(min-width:901px) and (max-width:1450px){.menus-workspace{grid-template-columns:minmax(180px,220px) minmax(0,1fr)}.menu-preview-panel{grid-column:1/-1;position:static}.menu-preview-panel .echo-preview-screen{width:min(760px,100%);max-width:none}}
       .icon-preview:not(:has(ha-icon)){font-size:0}
       .icon-preview:not(:has(ha-icon))::after{content:"—";font-size:1rem;color:#8790aa}
       @media(max-width:900px){.section-nav{scrollbar-width:none}.section-nav::-webkit-scrollbar{display:none}}
