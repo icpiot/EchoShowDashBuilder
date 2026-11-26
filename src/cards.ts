@@ -120,7 +120,7 @@ class EchoMenu extends HTMLElement {
 }
 
 class EchoCameraWall extends HTMLElement {
-  private config: any = {}; private _hass?: Hass; private timer?: number; private observer?: ResizeObserver; private lastRefreshByEntity = new Map<string, number>();
+  private config: any = {}; private _hass?: Hass; private timer?: number; private observer?: ResizeObserver; private lastRefreshByEntity = new Map<string, number>(); private imageFailures = new Map<string, number>();
   private onWindowResize = () => this.updateLayout();
   setConfig(config: any) { this.config = config || {}; this.render(); setMenuVisibility(this, this.config); }
   set hass(value: Hass) { const first = !this._hass; this._hass = value; this.updateDetectionStates(); if (first) this.refresh(); }
@@ -129,7 +129,7 @@ class EchoCameraWall extends HTMLElement {
   private cameras() { return Array.isArray(this.config.cameras) ? this.config.cameras : []; }
   private render() {
     const root = this.shadowRoot ?? this.attachShadow({mode:'open'});
-    root.innerHTML = `<style>${styles}</style><section class="wall" aria-label="Camera wall"></section>`;
+    root.innerHTML = `<style>${styles}.tile.offline{background:#171a1f;display:grid;place-items:center}.tile.offline img{display:none}.tile.offline::after{content:'Offline';color:#c7cbd1;font-size:clamp(14px,2vw,22px);font-weight:600}.tile.offline .label{display:none}</style><section class="wall" aria-label="Camera wall"></section>`;
     const wall = root.querySelector('.wall')!;
     for (const camera of this.cameras()) {
       const tile = document.createElement('article'); tile.className='tile'; tile.dataset.entity=camera.entity;
@@ -139,7 +139,7 @@ class EchoCameraWall extends HTMLElement {
       const horizontal = overlay.horizontal === 'center' ? 'center' : overlay.horizontal === 'right' ? 'right' : 'left';
       const vertical = overlay.vertical === 'top' ? 'top' : 'bottom';
       tile.innerHTML = `<img alt="${camera.label || camera.entity}"><span class="person-badge" hidden></span><span class="label ${vertical} ${horizontal}" ${overlay.show === false ? 'hidden' : ''}>${camera.label || camera.entity}</span>`;
-      tile.addEventListener('click', () => this.openNativeFeed(camera));
+      tile.addEventListener('click', () => { if (!tile.classList.contains('offline')) this.openNativeFeed(camera); });
       wall.appendChild(tile);
     }
     if (!this.cameras().length) wall.innerHTML='<div class="empty">No cameras are configured.</div>';
@@ -269,7 +269,11 @@ class EchoCameraWall extends HTMLElement {
       if (now - (this.lastRefreshByEntity.get(entity) || 0) < refreshInterval) continue;
       this.lastRefreshByEntity.set(entity, now);
       const source = this._hass.states[entity]?.attributes?.entity_picture;
-      if (!source) continue;
+      const state = String(this._hass.states[entity]?.state || '').toLowerCase();
+      if (!source || state === 'unavailable' || state === 'unknown') {
+        img.removeAttribute('src'); tile.classList.add('offline'); tile.dataset.imageError = '1';
+        continue;
+      }
       const width = Math.max(240, Math.round(tile.clientWidth * Math.min(window.devicePixelRatio || 1, 2)));
       const url = new URL(source, window.location.origin);
       url.searchParams.set('width', String(width));
@@ -278,10 +282,15 @@ class EchoCameraWall extends HTMLElement {
       const next = new Image();
       next.onload = () => {
         img.src = next.src;
+        tile.classList.remove('offline');
+        this.imageFailures.delete(entity);
         delete tile.dataset.imageError;
         img.dataset.loading = '0';
       };
       next.onerror = () => {
+        const failures = (this.imageFailures.get(entity) || 0) + 1;
+        this.imageFailures.set(entity, failures);
+        if (failures >= 2) { img.removeAttribute('src'); tile.classList.add('offline'); }
         tile.dataset.imageError = '1';
         img.dataset.loading = '0';
       };
