@@ -1166,6 +1166,8 @@ class EchoShowEditor extends HTMLElement {
           (page === "deployment" && isManaged) ||
           (page === "overview" && isAddress));
       });
+      const sidebarMenus = root.querySelector<HTMLElement>(".sidebar-menu-panel");
+      if (sidebarMenus) sidebarMenus.hidden = page !== "menus";
       root.querySelectorAll<HTMLButtonElement>(".section-nav [data-section-target]").forEach((item) => {
         const active = item.dataset.sectionTarget === page;
         item.classList.toggle("active", active);
