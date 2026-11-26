@@ -322,7 +322,10 @@ class EchoLightControls extends HTMLElement {
   private render() {
     const root = this.shadowRoot ?? this.attachShadow({mode:'open'});
     const lights = Array.isArray(this.config.lights) ? this.config.lights : [];
-    const columns = Math.max(1, Math.min(6, Number(this.config.columns) || 0));
+    const requestedColumns = Number(this.config.columns);
+    const columns = Number.isFinite(requestedColumns) && requestedColumns >= 1
+      ? Math.min(6, Math.floor(requestedColumns))
+      : 0;
     root.innerHTML = `<style>${styles}.light-list{display:grid;grid-template-columns:${columns ? `repeat(${columns},minmax(0,1fr))` : 'repeat(auto-fit,minmax(min(100%,260px),1fr))'};gap:8px}.light{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;padding:12px;border-radius:10px;background:var(--ha-card-background,#20252b);color:#f5f7fa}.light-name{font-size:clamp(14px,2vw,20px)}.light-state{opacity:.82;font-size:.85em}.light button{border:0;border-radius:8px;padding:10px 16px;background:var(--primary-color,#03a9f4);color:#fff;font:inherit;cursor:pointer}.light button[aria-pressed=true]{background:var(--success-color,#4caf50)}.brightness{grid-column:1/-1;display:flex;gap:10px;align-items:center}.brightness input{flex:1;min-width:80px}</style><section class="light-list" aria-label="Light controls"></section>`;
     const list = root.querySelector('.light-list')!;
     if (!lights.length) { list.innerHTML = '<div class="empty">No lights are configured.</div>'; return; }
@@ -358,7 +361,10 @@ class EchoTemperatureReadings extends HTMLElement {
   private render() {
     const root = this.shadowRoot ?? this.attachShadow({mode:'open'});
     const sensors = Array.isArray(this.config.sensors) ? this.config.sensors : [];
-    const columns = Math.max(1, Math.min(6, Number(this.config.columns) || 0));
+    const requestedColumns = Number(this.config.columns);
+    const columns = Number.isFinite(requestedColumns) && requestedColumns >= 1
+      ? Math.min(6, Math.floor(requestedColumns))
+      : 0;
     root.innerHTML = `<style>${styles}.temperature-list{display:grid;grid-template-columns:${columns ? `repeat(${columns},minmax(0,1fr))` : 'repeat(auto-fit,minmax(min(100%,220px),1fr))'};gap:8px}.temperature{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px 16px;border-radius:10px;background:var(--ha-card-background,#20252b);color:#f5f7fa}.temperature-name{font-size:clamp(14px,2vw,19px)}.temperature-value{font-size:clamp(22px,3.4vw,34px);font-weight:600;white-space:nowrap}</style><section class="temperature-list" aria-label="Temperature readings"></section>`;
     const list = root.querySelector('.temperature-list')!;
     if (!sensors.length) { list.innerHTML = '<div class="empty">No temperature sensors are configured.</div>'; return; }
