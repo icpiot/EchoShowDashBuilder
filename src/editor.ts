@@ -1001,6 +1001,9 @@ class EchoShowEditor extends HTMLElement {
       `;
       root.querySelector(".section-nav")?.insertAdjacentHTML("beforebegin", `<header class="builder-app-header"><div class="brand-mark" aria-hidden="true"><span></span><span></span></div><div class="brand-copy"><strong>Echo Dash Builder</strong><small>Dashboard workspace</small></div><div class="header-spacer"></div><span class="header-dash-name">${escapeHtml(savedProfiles.find((profile) => profile.id === selectedProfileId)?.name || "Choose a Dash")}</span><button type="button" id="header-save-profile" ${selectedProfileId ? "" : "disabled"}>Save Draft</button><button type="button" data-section-target="menus">Edit menus</button><button type="button" data-section-target="deployment" class="primary-action">Review deployment <span aria-hidden="true">↗</span></button></header>`);
     const menuSection = root.querySelector<HTMLElement>("#dashboard-content");
+    // The menu structure lives in the persistent left navigation; remove the
+    // legacy workspace copy so selection and the library have one source.
+    menuSection?.querySelectorAll<HTMLElement>(".menus-workspace > .menu-workspace-list").forEach((node) => node.remove());
     menuSection?.querySelector(".menus-workspace")?.insertAdjacentHTML("beforeend", `<aside class="menu-preview-panel"><div class="panel-heading"><div><span class="eyebrow">PREVIEW</span><h4>Menu layout</h4></div></div><p class="hint">A scaled Show 8 preview using the draft menu layout.</p><div data-menu-preview>${menuPreviewMarkup(selectedMenu)}</div><div class="preview-note">The Echo uses the selected device and its available entities when this Dash is applied.</div></aside>`);
     // Reuse the registered runtime camera-wall element for the preview wall so
     // image containment, labels, detection presentation and native tile sizing
@@ -1084,7 +1087,7 @@ class EchoShowEditor extends HTMLElement {
     const includedItems = menuEditor?.querySelector<HTMLElement>("[data-included-items]");
     if (includedItems) (selectedMenuCard?.querySelector(".content-picker") || selectedMenuCard)?.before(includedItems);
     const cardLibrarySection = root.querySelector<HTMLElement>(".custom-card-holder");
-    if (menuSection && cardLibrarySection) menuSection.querySelector(".menu-workspace-list")?.append(cardLibrarySection);
+    if (cardLibrarySection) menuSection?.querySelector(".menus-workspace")?.prepend(cardLibrarySection);
     const libraryHeading = cardLibrarySection?.querySelector("summary");
     if (libraryHeading) libraryHeading.textContent = `Content Library (${cardLibrary.length})`;
     const menuHeading = menuSection?.querySelector("h3");
