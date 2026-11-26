@@ -262,18 +262,19 @@ class EchoCameraWall extends HTMLElement {
       const entity = tile.dataset.entity;
       if (!entity) continue;
       const img = tile.querySelector('img');
-      if (!img || img.dataset.loading === '1') continue;
+      if (!img) continue;
       const camera = this.cameras().find((item: any) => item.entity === entity);
+      const state = String(this._hass.states[entity]?.state || '').toLowerCase();
+      const source = this._hass.states[entity]?.attributes?.entity_picture;
+      if (!source || state === 'unavailable' || state === 'unknown') {
+        img.removeAttribute('src'); img.dataset.loading = '0'; tile.classList.add('offline'); tile.dataset.imageError = '1';
+        continue;
+      }
+      if (img.dataset.loading === '1') continue;
       const refreshInterval = Math.max(100, Number(camera?.refresh_interval || this.config.refresh_interval || 5000));
       const now = Date.now();
       if (now - (this.lastRefreshByEntity.get(entity) || 0) < refreshInterval) continue;
       this.lastRefreshByEntity.set(entity, now);
-      const source = this._hass.states[entity]?.attributes?.entity_picture;
-      const state = String(this._hass.states[entity]?.state || '').toLowerCase();
-      if (!source || state === 'unavailable' || state === 'unknown') {
-        img.removeAttribute('src'); tile.classList.add('offline'); tile.dataset.imageError = '1';
-        continue;
-      }
       const width = Math.max(240, Math.round(tile.clientWidth * Math.min(window.devicePixelRatio || 1, 2)));
       const url = new URL(source, window.location.origin);
       url.searchParams.set('width', String(width));
@@ -281,6 +282,11 @@ class EchoCameraWall extends HTMLElement {
       img.dataset.loading = '1';
       const next = new Image();
       next.onload = () => {
+        const currentState = String(this._hass?.states?.[entity]?.state || '').toLowerCase();
+        const currentSource = this._hass?.states?.[entity]?.attributes?.entity_picture;
+        if (!currentSource || currentState === 'unavailable' || currentState === 'unknown') {
+          img.removeAttribute('src'); img.dataset.loading = '0'; tile.classList.add('offline'); tile.dataset.imageError = '1'; return;
+        }
         img.src = next.src;
         tile.classList.remove('offline');
         this.imageFailures.delete(entity);
