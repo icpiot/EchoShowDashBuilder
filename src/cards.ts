@@ -266,7 +266,11 @@ class EchoCameraWall extends HTMLElement {
       const camera = this.cameras().find((item: any) => item.entity === entity);
       const state = String(this._hass.states[entity]?.state || '').toLowerCase();
       const source = this._hass.states[entity]?.attributes?.entity_picture;
-      if (!source || state === 'unavailable' || state === 'unknown') {
+      const healthEntity = entity.startsWith('camera.') ? `sensor.${entity.slice(7)}_camera_fps` : '';
+      const healthState = healthEntity ? this._hass.states[healthEntity]?.state : undefined;
+      const healthKnown = healthState !== undefined;
+      const healthOffline = healthKnown && (!Number.isFinite(Number(healthState)) || Number(healthState) <= 0);
+      if (!source || state === 'unavailable' || state === 'unknown' || healthOffline) {
         img.removeAttribute('src'); img.dataset.loading = '0'; tile.classList.add('offline'); tile.dataset.imageError = '1';
         continue;
       }
@@ -284,7 +288,9 @@ class EchoCameraWall extends HTMLElement {
       next.onload = () => {
         const currentState = String(this._hass?.states?.[entity]?.state || '').toLowerCase();
         const currentSource = this._hass?.states?.[entity]?.attributes?.entity_picture;
-        if (!currentSource || currentState === 'unavailable' || currentState === 'unknown') {
+        const currentHealth = healthEntity ? this._hass?.states?.[healthEntity]?.state : undefined;
+        const currentHealthOffline = currentHealth !== undefined && (!Number.isFinite(Number(currentHealth)) || Number(currentHealth) <= 0);
+        if (!currentSource || currentState === 'unavailable' || currentState === 'unknown' || currentHealthOffline) {
           img.removeAttribute('src'); img.dataset.loading = '0'; tile.classList.add('offline'); tile.dataset.imageError = '1'; return;
         }
         img.src = next.src;
