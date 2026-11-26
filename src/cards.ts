@@ -216,12 +216,16 @@ class EchoCameraWall extends HTMLElement {
       const spans = spansFor(columns);
       let rows = 0;
       let occupied = 0;
-      for (const span of spans) {
-        if (occupied + span > columns) { rows += 1; occupied = 0; }
+      let rowHeight = 1;
+      for (let index = 0; index < spans.length; index += 1) {
+        const span = spans[index];
+        const height = Math.max(1, Math.min(2, Number(this.cameras()[index]?.height) || 1));
+        if (occupied + span > columns) { rows += rowHeight; occupied = 0; rowHeight = 1; }
         occupied += span;
-        if (occupied === columns) { rows += 1; occupied = 0; }
+        rowHeight = Math.max(rowHeight, height);
+        if (occupied === columns) { rows += rowHeight; occupied = 0; rowHeight = 1; }
       }
-      if (occupied > 0) rows += 1;
+      if (occupied > 0) rows += rowHeight;
       rows = Math.max(1, rows);
       const tileWidth = (width - gap * (columns - 1)) / columns;
       const tileHeight = (layoutHeight - gap * (rows - 1)) / rows;
