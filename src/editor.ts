@@ -1005,6 +1005,9 @@ class EchoShowEditor extends HTMLElement {
     // legacy workspace copy so selection and the library have one source.
     menuSection?.querySelectorAll<HTMLElement>(".menus-workspace > .menu-workspace-list").forEach((node) => node.remove());
     menuSection?.querySelector(".menus-workspace")?.insertAdjacentHTML("beforeend", `<aside class="menu-preview-panel"><div class="panel-heading"><div><span class="eyebrow">PREVIEW</span><h4>Menu layout</h4></div></div><p class="hint">A scaled Show 8 preview using the draft menu layout.</p><div data-menu-preview>${menuPreviewMarkup(selectedMenu)}</div><div class="preview-note">The Echo uses the selected device and its available entities when this Dash is applied.</div></aside>`);
+    const menuDefaultsPanel = menuSection?.querySelector<HTMLElement>(".menu-secondary-settings");
+    const previewPanel = menuSection?.querySelector<HTMLElement>(".menu-preview-panel");
+    if (menuDefaultsPanel && previewPanel) previewPanel.after(menuDefaultsPanel);
     // Reuse the registered runtime camera-wall element for the preview wall so
     // image containment, labels, detection presentation and native tile sizing
     // come from the same component used by the generated dashboard.
